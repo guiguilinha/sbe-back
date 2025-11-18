@@ -1,0 +1,1 @@
+{"version":3,"file":"calculated-result.types.d.ts","sourceRoot":"","sources":["../../../src/contracts/results/calculated-result.types.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,uBAAuB,EAAE,MAAM,mCAAmC,CAAC;AAEjF,MAAM,WAAW,gBAAgB;IAC/B,WAAW,EAAE,MAAM,CAAC;IACpB,aAAa,EAAE;QACb,EAAE,EAAE,MAAM,CAAC;QACX,KAAK,EAAE,MAAM,CAAC;KACf,CAAC;IACF,UAAU,EAAE,uBAAuB,EAAE,CAAC;CACvC"}

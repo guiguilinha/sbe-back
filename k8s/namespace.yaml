@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: maturidade-digital
+  labels:
+    name: maturidade-digital
+    app: maturidade-digital

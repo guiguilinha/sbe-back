@@ -1,0 +1,1 @@
+{"version":3,"file":"answer-req-payload.types.d.ts","sourceRoot":"","sources":["../../../src/contracts/results/answer-req-payload.types.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,aAAa;IAC5B,WAAW,EAAE,MAAM,CAAC;IACpB,SAAS,EAAE,MAAM,CAAC;IAClB,KAAK,EAAE,MAAM,CAAC;IACd,WAAW,EAAE,MAAM,CAAC;CACrB"}

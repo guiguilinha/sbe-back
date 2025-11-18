@@ -1,0 +1,1931 @@
+{
+  "info": {
+    "_postman_id": "d7f6f9b8-a25e-4a26-bafd-dfe9dcacff94",
+    "name": "Directus — Diagnóstico v11 (atomic) — use seu ambiente",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Coleções / Campos (string, int, date, text) / Relações — cada requisição separada.\nOrdem: 00 → 01 → 02 → 03. Usa {{base_url}} e {{token}} já existentes."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "00 — sanity",
+      "item": [
+        {
+          "name": "GET /server/ping",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/server/ping",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "server",
+                "ping"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 — create-collections",
+      "item": [
+        {
+          "name": "POST /collections users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/collections",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "collections"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"users\", \"meta\": {\"icon\": \"table_rows\", \"note\": \"Usuários (diagnóstico)\"}, \"schema\": {\"name\": \"users\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /collections companies",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/collections",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "collections"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"companies\", \"meta\": {\"icon\": \"table_rows\", \"note\": \"Empresas\"}, \"schema\": {\"name\": \"companies\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /collections user_companies",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/collections",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "collections"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"user_companies\", \"meta\": {\"icon\": \"table_rows\", \"note\": \"Junction: users × companies\"}, \"schema\": {\"name\": \"user_companies\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /collections diagnostics",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/collections",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "collections"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"diagnostics\", \"meta\": {\"icon\": \"table_rows\", \"note\": \"Sessões de diagnóstico\"}, \"schema\": {\"name\": \"diagnostics\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /collections diagnostic_categories",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/collections",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "collections"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"diagnostic_categories\", \"meta\": {\"icon\": \"table_rows\", \"note\": \"Resultado por categoria\"}, \"schema\": {\"name\": \"diagnostic_categories\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /collections answers_given",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/collections",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "collections"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"answers_given\", \"meta\": {\"icon\": \"table_rows\", \"note\": \"Respostas dadas\"}, \"schema\": {\"name\": \"answers_given\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 — create-fields",
+      "item": [
+        {
+          "name": "POST /fields/users — given_name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"given_name\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/users — last_name",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"last_name\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/users — cpf",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"cpf\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/users — data_nascimento",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"data_nascimento\", \"type\": \"date\", \"meta\": {\"interface\": \"date\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/users — genero",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"genero\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/users — uf",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"uf\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/users — cidade",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"cidade\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/users — email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"email\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/companies — cnpj",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/companies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "companies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"cnpj\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/companies — nome",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/companies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "companies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"nome\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/user_companies — user_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/user_companies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "user_companies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"user_id\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/user_companies — company_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/user_companies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "user_companies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"company_id\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/user_companies — is_principal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/user_companies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "user_companies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"is_principal\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/user_companies — cod_status_empresa",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/user_companies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "user_companies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"cod_status_empresa\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/user_companies — des_tipo_vinculo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/user_companies",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "user_companies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"des_tipo_vinculo\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostics — user_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostics"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"user_id\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostics — performed_at",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostics"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"performed_at\", \"type\": \"timestamp\", \"meta\": {\"interface\": \"datetime\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostics — overall_level_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostics"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"overall_level_id\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostics — overall_score",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostics"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"overall_score\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostics — overall_insight",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostics"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"overall_insight\", \"type\": \"text\", \"meta\": {\"interface\": \"input-multiline\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostics — status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostics"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"status\", \"type\": \"string\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostic_categories — diagnostic_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostic_categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostic_categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"diagnostic_id\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostic_categories — category_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostic_categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostic_categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"category_id\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostic_categories — level_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostic_categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostic_categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"level_id\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostic_categories — score",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostic_categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostic_categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"score\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostic_categories — insight",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostic_categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostic_categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"insight\", \"type\": \"text\", \"meta\": {\"interface\": \"input-multiline\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/diagnostic_categories — tip",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/diagnostic_categories",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "diagnostic_categories"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"tip\", \"type\": \"text\", \"meta\": {\"interface\": \"input-multiline\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/answers_given — diagnostic_category_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/answers_given",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "answers_given"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"diagnostic_category_id\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/answers_given — question_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/answers_given",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "answers_given"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"question_id\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/answers_given — answer_id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/answers_given",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "answers_given"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"answer_id\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/answers_given — answer_text",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/answers_given",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "answers_given"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"answer_text\", \"type\": \"text\", \"meta\": {\"interface\": \"input-multiline\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /fields/answers_given — score",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fields/answers_given",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fields",
+                "answers_given"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"field\": \"score\", \"type\": \"integer\", \"meta\": {\"interface\": \"input\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 — create-relations",
+      "item": [
+        {
+          "name": "POST /relations — user_companies.user_id → users.id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/relations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"user_companies\", \"field\": \"user_id\", \"related_collection\": \"users\", \"schema\": {\"on_delete\": \"CASCADE\"}, \"meta\": {\"one_deselect_action\": \"delete\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /relations — user_companies.company_id → companies.id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/relations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"user_companies\", \"field\": \"company_id\", \"related_collection\": \"companies\", \"schema\": {\"on_delete\": \"CASCADE\"}, \"meta\": {\"one_deselect_action\": \"delete\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /relations — diagnostics.user_id → users.id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/relations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"diagnostics\", \"field\": \"user_id\", \"related_collection\": \"users\", \"schema\": {\"on_delete\": \"SET NULL\"}, \"meta\": {\"one_deselect_action\": \"nullify\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /relations — diagnostics.overall_level_id → levels.id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/relations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"diagnostics\", \"field\": \"overall_level_id\", \"related_collection\": \"levels\", \"schema\": {\"on_delete\": \"SET NULL\"}, \"meta\": {\"one_deselect_action\": \"nullify\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /relations — diagnostic_categories.diagnostic_id → diagnostics.id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/relations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"diagnostic_categories\", \"field\": \"diagnostic_id\", \"related_collection\": \"diagnostics\", \"schema\": {\"on_delete\": \"SET NULL\"}, \"meta\": {\"one_deselect_action\": \"nullify\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /relations — diagnostic_categories.category_id → categories.id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/relations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"diagnostic_categories\", \"field\": \"category_id\", \"related_collection\": \"categories\", \"schema\": {\"on_delete\": \"SET NULL\"}, \"meta\": {\"one_deselect_action\": \"nullify\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /relations — diagnostic_categories.level_id → levels.id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/relations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"diagnostic_categories\", \"field\": \"level_id\", \"related_collection\": \"levels\", \"schema\": {\"on_delete\": \"SET NULL\"}, \"meta\": {\"one_deselect_action\": \"nullify\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /relations — answers_given.diagnostic_category_id → diagnostic_categories.id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/relations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"answers_given\", \"field\": \"diagnostic_category_id\", \"related_collection\": \"diagnostic_categories\", \"schema\": {\"on_delete\": \"SET NULL\"}, \"meta\": {\"one_deselect_action\": \"nullify\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /relations — answers_given.question_id → quiz_questions.id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/relations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"answers_given\", \"field\": \"question_id\", \"related_collection\": \"quiz_questions\", \"schema\": {\"on_delete\": \"SET NULL\"}, \"meta\": {\"one_deselect_action\": \"nullify\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /relations — answers_given.answer_id → quiz_answers.id",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/relations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "relations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"collection\": \"answers_given\", \"field\": \"answer_id\", \"related_collection\": \"quiz_answers\", \"schema\": {\"on_delete\": \"SET NULL\"}, \"meta\": {\"one_deselect_action\": \"nullify\"}}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 or 201', function () {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([200,201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

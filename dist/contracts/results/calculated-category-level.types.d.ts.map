@@ -1,0 +1,1 @@
+{"version":3,"file":"calculated-category-level.types.d.ts","sourceRoot":"","sources":["../../../src/contracts/results/calculated-category-level.types.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,uBAAuB;IACtC,WAAW,EAAE,MAAM,CAAC;IACpB,KAAK,EAAE,MAAM,CAAC;IACd,KAAK,EAAE;QACL,EAAE,EAAE,MAAM,CAAC;QACX,KAAK,EAAE,MAAM,CAAC;KACf,CAAC;CACH"}

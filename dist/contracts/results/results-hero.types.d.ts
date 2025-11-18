@@ -1,0 +1,7 @@
+export interface ResultsHeroInsights {
+    id: number;
+    level_id: number;
+    description: string;
+    order: number;
+}
+//# sourceMappingURL=results-hero.types.d.ts.map

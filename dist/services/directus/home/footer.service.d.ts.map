@@ -1,0 +1,1 @@
+{"version":3,"file":"footer.service.d.ts","sourceRoot":"","sources":["../../../../src/services/directus/home/footer.service.ts"],"names":[],"mappings":"AACA,OAAO,EAKL,cAAc,EACf,MAAM,oBAAoB,CAAC;AAC5B,OAAO,EAAE,mBAAmB,EAAE,MAAM,+BAA+B,CAAC;AAEpE,qBAAa,aAAc,SAAQ,mBAAmB;IACpD,SAAS,CAAC,WAAW,SAAiB;IAEhC,aAAa,CAAC,YAAY,CAAC,EAAE,MAAM,GAAG,OAAO,CAAC,cAAc,CAAC;CAqBpE"}

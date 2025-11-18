@@ -1,0 +1,1 @@
+{"version":3,"file":"answers.types.d.ts","sourceRoot":"","sources":["../../../src/contracts/quiz/answers.types.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,UAAU;IACzB,EAAE,EAAE,MAAM,CAAC;IACX,MAAM,EAAE,MAAM,CAAC;IACf,KAAK,EAAE,MAAM,CAAC;IACd,KAAK,EAAE,MAAM,CAAC;IACd,WAAW,EAAE,MAAM,CAAC;IACpB,MAAM,CAAC,EAAE,MAAM,CAAC;CACjB"}

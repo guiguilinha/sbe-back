@@ -1,0 +1,1 @@
+{"version":3,"file":"legacy-quiz.service.d.ts","sourceRoot":"","sources":["../../src/services/legacy-quiz.service.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,iBAAiB,EAAE,kBAAkB,EAAiC,MAAM,gCAAgC,CAAC;AAMtH,qBAAa,iBAAiB;IAC5B,OAAO,CAAC,YAAY,CAA6B;IAE3C,YAAY,CAAC,OAAO,EAAE,iBAAiB,EAAE,YAAY,CAAC,EAAE,MAAM,GAAG,OAAO,CAAC,kBAAkB,CAAC;YA8QpF,wBAAwB;YA6KxB,aAAa;CA8B5B"}

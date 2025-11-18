@@ -1,0 +1,1 @@
+{"version":3,"file":"recommendation.d.ts","sourceRoot":"","sources":["../../src/contracts/recommendation.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,aAAa;IAC5B,EAAE,EAAE,MAAM,CAAC;IACX,KAAK,EAAE,MAAM,CAAC;IACd,WAAW,EAAE,MAAM,CAAC;IACpB,SAAS,EAAE,MAAM,CAAC;IAClB,SAAS,EAAE,MAAM,CAAC;IAClB,KAAK,CAAC,EAAE,MAAM,CAAC;CAChB"}

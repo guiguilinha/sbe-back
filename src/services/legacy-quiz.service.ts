@@ -1,0 +1,485 @@
+import { createMySQLConnection } from '../config/mysql.config';
+import { LegacyQuizRequest, LegacyQuizResponse, LegacyQuizMapping, UserAnswer } from '../contracts/legacy-quiz.types';
+import { AnswersService } from './directus/quiz/answers.service';
+import { ResultsService } from './directus/results.service';
+import { CalculatedResult } from '../contracts/results/calculated-result.types';
+import { QuizAnswer } from '../contracts/quiz/answers.types';
+
+export class LegacyQuizService {
+  private answersCache: QuizAnswer[] | null = null;
+
+  async saveQuizData(request: LegacyQuizRequest, previewToken?: string): Promise<LegacyQuizResponse> {
+    const startTime = Date.now();
+    let connection;
+    
+    try {
+      console.log('🔄 [LegacyQuizService] ===== INÍCIO DO PROCESSAMENTO =====');
+      console.log('📍 [LegacyQuizService] Etapa 0/5: Recebendo e validando dados...');
+      console.log('📊 [LegacyQuizService] Dados recebidos:', {
+        answersCount: request.answers.length,
+        hasUserData: !!request.userData,
+        userEmail: request.userData?.email,
+        hasPreviewToken: !!previewToken,
+        timestamp: new Date().toISOString()
+      });
+
+      // ETAPA 1: Criar conexão MySQL
+      console.log('📍 [LegacyQuizService] Etapa 1/5: Criando conexão MySQL...');
+      try {
+        console.log('🔌 [MySQL] Tentando criar conexão...');
+        connection = await createMySQLConnection();
+        console.log('✅ [MySQL] CONEXÃO ESTABELECIDA COM SUCESSO');
+        console.log('   📊 Status da conexão:', {
+          threadId: (connection as any).threadId || 'N/A',
+          state: (connection as any).state || 'N/A',
+          connected: 'SIM ✅'
+        });
+        console.log('✅ [LegacyQuizService] Etapa 1/5 COMPLETA: Conexão MySQL criada com sucesso');
+      } catch (mysqlError) {
+        console.error('❌ [LegacyQuizService] Etapa 1/5 FALHOU: Erro ao criar conexão MySQL');
+        console.error('   Detalhes:', mysqlError instanceof Error ? mysqlError.message : String(mysqlError));
+        console.error('   Stack:', mysqlError instanceof Error ? mysqlError.stack : 'N/A');
+        throw new Error(`Erro ao conectar no MySQL: ${mysqlError instanceof Error ? mysqlError.message : String(mysqlError)}`);
+      }
+
+      // ETAPA 2: REUTILIZAR cálculo já existente (não recalcular!)
+      console.log('📍 [LegacyQuizService] Etapa 2/5: Reutilizando cálculo do ResultsService...');
+      let calculatedResult: CalculatedResult;
+      try {
+        const calcStartTime = Date.now();
+        calculatedResult = await ResultsService.calculateResult({ 
+          answers: request.answers as any, // UserAnswer é compatível com AnswerPayload
+          previewToken: previewToken
+        });
+        const calcDuration = Date.now() - calcStartTime;
+        console.log('✅ [LegacyQuizService] Etapa 2/5 COMPLETA: Resultado calculado recebido');
+        console.log('\n📊 [CALCULATED_RESULT] Dados completos do resultado calculado:');
+        console.log(JSON.stringify({
+          total_score: calculatedResult.total_score,
+          general_level: {
+            id: calculatedResult.general_level.id,
+            title: calculatedResult.general_level.title
+          },
+          categories: calculatedResult.categories.map(cat => ({
+            category_id: cat.category_id,
+            score: cat.score,
+            level: {
+              id: cat.level.id,
+              title: cat.level.title
+            }
+          }))
+        }, null, 2));
+        console.log('   📊 Resumo:', {
+          totalScore: calculatedResult.total_score,
+          generalLevel: calculatedResult.general_level.title,
+          categoriesCount: calculatedResult.categories.length,
+          tempo: `${calcDuration}ms`
+        });
+        console.log('   📋 Detalhes por categoria:');
+        calculatedResult.categories.forEach(cat => {
+          console.log(`      - Categoria ${cat.category_id}: ${cat.score} pontos → ${cat.level.title}`);
+        });
+      } catch (error) {
+        console.error('❌ [LegacyQuizService] Etapa 2/5 FALHOU: Erro ao calcular resultado');
+        console.error('   Detalhes:', error instanceof Error ? error.message : String(error));
+        console.error('   Stack:', error instanceof Error ? error.stack : 'N/A');
+        throw new Error(`Erro ao calcular resultado: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      // ETAPA 3: Buscar dados do quiz do Directus para obter textos das respostas
+      console.log('📍 [LegacyQuizService] Etapa 3/5: Buscando textos das respostas no Directus...');
+      let answersCache: QuizAnswer[];
+      try {
+        const answersStartTime = Date.now();
+        const answersService = new AnswersService();
+        answersCache = await answersService.getAnswers(previewToken);
+        this.answersCache = answersCache;
+        const answersDuration = Date.now() - answersStartTime;
+        console.log('✅ [LegacyQuizService] Etapa 3/5 COMPLETA: Textos de respostas carregados');
+        console.log('   📊 Resultado:', {
+          totalRespostas: answersCache.length,
+          tempo: `${answersDuration}ms`
+        });
+      } catch (error) {
+        console.error('⚠️ [LegacyQuizService] Etapa 3/5 FALHOU (não crítico): Erro ao buscar textos de respostas');
+        console.error('   Detalhes:', error instanceof Error ? error.message : String(error));
+        console.error('   Stack:', error instanceof Error ? error.stack : 'N/A');
+        // Não falha, usa fallback depois
+        this.answersCache = [];
+        console.warn('   ⚠️ Continuando sem cache de respostas (usará fallback baseado em score)');
+      }
+
+      // ETAPA 4: Mapear dados usando resultado calculado
+      console.log('📍 [LegacyQuizService] Etapa 4/5: Mapeando dados para formato MySQL...');
+      let mappedData: LegacyQuizMapping;
+      try {
+        const mapStartTime = Date.now();
+        mappedData = await this.mapAnswersToLegacyFormat(
+          request.answers, 
+          calculatedResult,
+          request.userData, 
+          previewToken
+        );
+        const mapDuration = Date.now() - mapStartTime;
+        console.log('✅ [LegacyQuizService] Etapa 4/5 COMPLETA: Dados mapeados com sucesso');
+        console.log('\n📋 [LEGACY_QUIZ_MAPPING] Dados formatados completos para MySQL:');
+        console.log(JSON.stringify(mappedData, null, 2));
+        console.log('   📊 Tempo de mapeamento:', `${mapDuration}ms`);
+        console.log('   📋 Resumo dos dados mapeados:', {
+          niveis: {
+            processo: mappedData.nvl_processo,
+            vendas: mappedData.nvl_vendas,
+            presenca: mappedData.nvl_presenca,
+            com: mappedData.nvl_com,
+            financas: mappedData.nvl_financas,
+            geral: mappedData.nvl_geral
+          },
+          pontuacoes: {
+            processo: mappedData.total_pts_processo,
+            vendas: mappedData.total_pts_venda,
+            presenca: mappedData.total_pts_presenca,
+            com: mappedData.total_pts_com,
+            financas: mappedData.total_pts_financas,
+            geral: mappedData.total_pts
+          }
+        });
+      } catch (error) {
+        console.error('❌ [LegacyQuizService] Etapa 4/5 FALHOU: Erro ao mapear dados');
+        console.error('   Detalhes:', error instanceof Error ? error.message : String(error));
+        console.error('   Stack:', error instanceof Error ? error.stack : 'N/A');
+        throw error;
+      }
+
+      // ETAPA 5: Executar INSERT no MySQL
+      console.log('📍 [LegacyQuizService] Etapa 5/5: Executando INSERT no MySQL...');
+      try {
+        const sqlStartTime = Date.now();
+        
+        // Query SQL idêntica ao PHP
+        const sql = `INSERT INTO resposta_teste_maturidade (
+          processo_r1, processo_r2, processo_r3, processo_p1, processo_p2, processo_p3,
+          vendas_r1, vendas_r2, vendas_r3, vendas_p1, vendas_p2, vendas_p3,
+          presenca_r1, presenca_r2, presenca_r3, presenca_p1, presenca_p2, presenca_p3,
+          com_r1, com_r2, com_r3, com_p1, com_p2, com_p3,
+          financas_r1, financas_r2, financas_r3, financas_p1, financas_p2, financas_p3,
+          nome, empresa, email, whatsapp, uf, cidade, newsletter,
+          nvl_processo, total_pts_processo,
+          nvl_vendas, total_pts_venda,
+          nvl_presenca, total_pts_presenca,
+          nvl_com, total_pts_com,
+          nvl_financas, total_pts_financas,
+          nvl_geral, total_pts
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+        // Preparar parâmetros na ordem exata do PHP
+        const params = [
+          // Processo (r1, r2, r3, p1, p2, p3)
+          mappedData.processo_r1, mappedData.processo_r2, mappedData.processo_r3,
+          mappedData.processo_p1, mappedData.processo_p2, mappedData.processo_p3,
+          
+          // Vendas (r1, r2, r3, p1, p2, p3)
+          mappedData.vendas_r1, mappedData.vendas_r2, mappedData.vendas_r3,
+          mappedData.vendas_p1, mappedData.vendas_p2, mappedData.vendas_p3,
+          
+          // Presença (r1, r2, r3, p1, p2, p3)
+          mappedData.presenca_r1, mappedData.presenca_r2, mappedData.presenca_r3,
+          mappedData.presenca_p1, mappedData.presenca_p2, mappedData.presenca_p3,
+          
+          // Comunicação (r1, r2, r3, p1, p2, p3)
+          mappedData.com_r1, mappedData.com_r2, mappedData.com_r3,
+          mappedData.com_p1, mappedData.com_p2, mappedData.com_p3,
+          
+          // Finanças (r1, r2, r3, p1, p2, p3)
+          mappedData.financas_r1, mappedData.financas_r2, mappedData.financas_r3,
+          mappedData.financas_p1, mappedData.financas_p2, mappedData.financas_p3,
+          
+          // Dados do usuário
+          mappedData.nome, mappedData.empresa, mappedData.email, mappedData.whatsapp,
+          mappedData.uf, mappedData.cidade, mappedData.newsletter,
+          
+          // Níveis e pontuações
+          mappedData.nvl_processo, mappedData.total_pts_processo,
+          mappedData.nvl_vendas, mappedData.total_pts_venda,
+          mappedData.nvl_presenca, mappedData.total_pts_presenca,
+          mappedData.nvl_com, mappedData.total_pts_com,
+          mappedData.nvl_financas, mappedData.total_pts_financas,
+          mappedData.nvl_geral, mappedData.total_pts
+        ];
+
+        console.log('   📝 Query SQL preparada com', params.length, 'parâmetros');
+        
+        // Verificar status da conexão antes do INSERT
+        console.log('\n🔌 [MySQL] Status da conexão ANTES do INSERT:');
+        console.log('   Thread ID:', (connection as any).threadId || 'N/A');
+        console.log('   Estado:', (connection as any).state || 'N/A');
+        console.log('   Conectado: SIM ✅');
+        
+        console.log('\n💾 [MySQL] Executando INSERT...');
+        const [result] = await connection.execute(sql, params);
+        const sqlDuration = Date.now() - sqlStartTime;
+        const totalDuration = Date.now() - startTime;
+        
+        console.log('✅ [MySQL] INSERT EXECUTADO COM SUCESSO');
+        console.log('   📊 Resultado do INSERT:', {
+          insertId: (result as any).insertId,
+          affectedRows: (result as any).affectedRows,
+          tempoSQL: `${sqlDuration}ms`
+        });
+        console.log('   ✅ Dados gravados no banco:', (result as any).affectedRows > 0 ? 'SIM ✅' : 'NÃO ❌');
+        
+        // Verificar status da conexão após o INSERT
+        console.log('\n🔌 [MySQL] Status da conexão APÓS o INSERT:');
+        console.log('   Thread ID:', (connection as any).threadId || 'N/A');
+        console.log('   Estado:', (connection as any).state || 'N/A');
+        console.log('   Conectado: SIM ✅');
+        
+        console.log('\n✅ [LegacyQuizService] Etapa 5/5 COMPLETA: Dados salvos com sucesso no MySQL');
+        console.log('   ⏱️ Tempo total:', `${totalDuration}ms`);
+      
+        return { 
+          success: true,
+          data: {
+            id: (result as any).insertId,
+            affectedRows: (result as any).affectedRows
+          }
+        };
+      } catch (sqlError) {
+        console.error('❌ [LegacyQuizService] Etapa 5/5 FALHOU: Erro ao executar SQL');
+        console.error('   Detalhes:', sqlError instanceof Error ? sqlError.message : String(sqlError));
+        console.error('   Stack:', sqlError instanceof Error ? sqlError.stack : 'N/A');
+        throw sqlError;
+      }
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : 'N/A';
+      
+      console.error('❌ [LegacyQuizService] Erro ao salvar dados:', error);
+      console.error('❌ [LegacyQuizService] Mensagem:', errorMessage);
+      console.error('❌ [LegacyQuizService] Stack:', errorStack);
+      
+      // Propagar erro para o controller
+      throw error;
+    } finally {
+      if (connection) {
+        try {
+          console.log('\n🔌 [MySQL] Fechando conexão...');
+          console.log('   Status antes de fechar:', (connection as any).state || 'N/A');
+          await connection.end();
+          console.log('✅ [MySQL] CONEXÃO FECHADA COM SUCESSO');
+          console.log('✅ [LegacyQuizService] Conexão MySQL encerrada');
+        } catch (closeError) {
+          console.error('❌ [MySQL] ERRO ao fechar conexão:', closeError);
+          console.error('⚠️ [LegacyQuizService] Erro ao encerrar conexão MySQL:', closeError);
+        }
+      } else {
+        console.log('⚠️ [MySQL] Conexão não foi criada, não há nada para fechar');
+      }
+    }
+  }
+
+  private async mapAnswersToLegacyFormat(
+    answers: UserAnswer[], 
+    calculatedResult: CalculatedResult,
+    userData?: any, 
+    previewToken?: string
+  ): Promise<LegacyQuizMapping> {
+    console.log('   🔄 Iniciando mapeamento de dados...');
+    
+    // Ordenar respostas por question_id para garantir ordem correta
+    console.log('   📋 Ordenando respostas por question_id...');
+    const sortedAnswers = answers.sort((a, b) => a.question_id - b.question_id);
+    
+    console.log('   📊 Respostas ordenadas:', sortedAnswers.map(a => ({
+      question_id: a.question_id,
+      category_id: a.category_id,
+      score: a.score,
+      answer_id: a.answer_id
+    })));
+
+    // Mapear respostas por categoria
+    console.log('   📋 Agrupando respostas por categoria...');
+    const categoryAnswers = new Map<number, UserAnswer[]>();
+    
+    for (const answer of sortedAnswers) {
+      if (!categoryAnswers.has(answer.category_id)) {
+        categoryAnswers.set(answer.category_id, []);
+      }
+      // Ordenar respostas dentro da categoria por question_id
+      const categoryArray = categoryAnswers.get(answer.category_id)!;
+      categoryArray.push(answer);
+      categoryArray.sort((a, b) => a.question_id - b.question_id);
+    }
+
+    console.log('   ✅ Respostas agrupadas por categoria:');
+    categoryAnswers.forEach((answers, catId) => {
+      console.log(`      Categoria ${catId}: ${answers.length} respostas`);
+    });
+
+    // Buscar apenas textos de resposta (níveis já estão calculados)
+    console.log('   📋 Buscando textos das respostas...');
+    const [
+      processo_r1, processo_r2, processo_r3,
+      vendas_r1, vendas_r2, vendas_r3,
+      presenca_r1, presenca_r2, presenca_r3,
+      com_r1, com_r2, com_r3,
+      financas_r1, financas_r2, financas_r3
+    ] = await Promise.all([
+      // Processo (categoria 1)
+      this.getAnswerText(categoryAnswers.get(1)?.[0]),
+      this.getAnswerText(categoryAnswers.get(1)?.[1]),
+      this.getAnswerText(categoryAnswers.get(1)?.[2]),
+      
+      // Vendas (categoria 2)
+      this.getAnswerText(categoryAnswers.get(2)?.[0]),
+      this.getAnswerText(categoryAnswers.get(2)?.[1]),
+      this.getAnswerText(categoryAnswers.get(2)?.[2]),
+      
+      // Presença (categoria 3)
+      this.getAnswerText(categoryAnswers.get(3)?.[0]),
+      this.getAnswerText(categoryAnswers.get(3)?.[1]),
+      this.getAnswerText(categoryAnswers.get(3)?.[2]),
+      
+      // Comunicação (categoria 4)
+      this.getAnswerText(categoryAnswers.get(4)?.[0]),
+      this.getAnswerText(categoryAnswers.get(4)?.[1]),
+      this.getAnswerText(categoryAnswers.get(4)?.[2]),
+      
+      // Finanças (categoria 5)
+      this.getAnswerText(categoryAnswers.get(5)?.[0]),
+      this.getAnswerText(categoryAnswers.get(5)?.[1]),
+      this.getAnswerText(categoryAnswers.get(5)?.[2])
+    ]);
+    console.log('   ✅ Textos das respostas obtidos');
+
+    // USAR níveis do calculatedResult (já calculados)
+    console.log('   📋 Extraindo níveis e pontuações do resultado calculado...');
+    const getCategoryLevel = (categoryId: number): string => {
+      const category = calculatedResult.categories.find(c => c.category_id === categoryId);
+      const level = category?.level.title || 'Iniciante digital';
+      console.log(`      Nível categoria ${categoryId}: ${level} (${category?.score || 0} pontos)`);
+      return level;
+    };
+
+    const getCategoryScore = (categoryId: number): number => {
+      const category = calculatedResult.categories.find(c => c.category_id === categoryId);
+      return category?.score || 0;
+    };
+
+    const nvl_processo = getCategoryLevel(1);
+    const nvl_vendas = getCategoryLevel(2);
+    const nvl_presenca = getCategoryLevel(3);
+    const nvl_com = getCategoryLevel(4);
+    const nvl_financas = getCategoryLevel(5);
+    const nvl_geral = calculatedResult.general_level.title;
+    
+    console.log(`   ✅ Nível geral: ${nvl_geral} (${calculatedResult.total_score} pontos)`);
+
+    // Mapear para estrutura PHP
+    const mapping: LegacyQuizMapping = {
+      // Processo (categoria 1)
+      processo_r1,
+      processo_r2,
+      processo_r3,
+      processo_p1: categoryAnswers.get(1)?.[0]?.score || 0,
+      processo_p2: categoryAnswers.get(1)?.[1]?.score || 0,
+      processo_p3: categoryAnswers.get(1)?.[2]?.score || 0,
+      
+      // Vendas (categoria 2)
+      vendas_r1,
+      vendas_r2,
+      vendas_r3,
+      vendas_p1: categoryAnswers.get(2)?.[0]?.score || 0,
+      vendas_p2: categoryAnswers.get(2)?.[1]?.score || 0,
+      vendas_p3: categoryAnswers.get(2)?.[2]?.score || 0,
+      
+      // Presença (categoria 3)
+      presenca_r1,
+      presenca_r2,
+      presenca_r3,
+      presenca_p1: categoryAnswers.get(3)?.[0]?.score || 0,
+      presenca_p2: categoryAnswers.get(3)?.[1]?.score || 0,
+      presenca_p3: categoryAnswers.get(3)?.[2]?.score || 0,
+      
+      // Comunicação (categoria 4)
+      com_r1,
+      com_r2,
+      com_r3,
+      com_p1: categoryAnswers.get(4)?.[0]?.score || 0,
+      com_p2: categoryAnswers.get(4)?.[1]?.score || 0,
+      com_p3: categoryAnswers.get(4)?.[2]?.score || 0,
+      
+      // Finanças (categoria 5)
+      financas_r1,
+      financas_r2,
+      financas_r3,
+      financas_p1: categoryAnswers.get(5)?.[0]?.score || 0,
+      financas_p2: categoryAnswers.get(5)?.[1]?.score || 0,
+      financas_p3: categoryAnswers.get(5)?.[2]?.score || 0,
+      
+      // Dados do usuário (valores padrão se não fornecidos)
+      nome: userData?.nome || 'Usuário',
+      empresa: userData?.empresa || 'Empresa',
+      email: userData?.email || 'usuario@empresa.com',
+      whatsapp: userData?.whatsapp || '00000000000',
+      uf: userData?.estado || 'MG',
+      cidade: userData?.cidade || 'Belo Horizonte',
+      newsletter: userData?.newsletter || false,
+      
+      // Níveis e pontuações (usando resultado calculado)
+      nvl_processo,
+      total_pts_processo: getCategoryScore(1),
+      nvl_vendas,
+      total_pts_venda: getCategoryScore(2),
+      nvl_presenca,
+      total_pts_presenca: getCategoryScore(3),
+      nvl_com,
+      total_pts_com: getCategoryScore(4),
+      nvl_financas,
+      total_pts_financas: getCategoryScore(5),
+      nvl_geral,
+      total_pts: calculatedResult.total_score
+    };
+
+    console.log('   ✅ Mapeamento concluído com sucesso');
+    console.log('   📋 Resumo final:', {
+      categorias: 5,
+      respostas: answers.length,
+      niveisExtraidos: 6,
+      dadosUsuario: !!userData
+    });
+    return mapping;
+  }
+
+  private async getAnswerText(answer?: UserAnswer): Promise<string> {
+    if (!answer) {
+      return 'Não respondido';
+    }
+    
+    // Buscar texto da resposta no Directus usando o answer_id
+    if (!this.answersCache || this.answersCache.length === 0) {
+      console.warn('⚠️ [LegacyQuizService] Cache de respostas vazio, usando fallback');
+      // Fallback baseado no score (manter compatibilidade)
+      if (answer.score >= 3) return 'Sempre';
+      if (answer.score >= 2) return 'Às vezes';
+      if (answer.score >= 1) return 'Raramente';
+      return 'Nunca';
+    }
+    
+    const answerOption = this.answersCache.find(a => a.id === answer.answer_id);
+    
+    if (answerOption && answerOption.answer) {
+      console.log(`✅ [LegacyQuizService] Texto encontrado para answer_id ${answer.answer_id}: ${answerOption.answer}`);
+      return answerOption.answer;
+    }
+    
+    console.warn(`⚠️ [LegacyQuizService] Resposta não encontrada para answer_id ${answer.answer_id}, usando fallback`);
+    // Fallback baseado no score
+    if (answer.score >= 3) return 'Sempre';
+    if (answer.score >= 2) return 'Às vezes';
+    if (answer.score >= 1) return 'Raramente';
+    return 'Nunca';
+  }
+
+}
+

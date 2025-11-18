@@ -1,0 +1,1 @@
+{"version":3,"file":"legacy-quiz.routes.js","sourceRoot":"","sources":["../../src/routes/legacy-quiz.routes.ts"],"names":[],"mappings":";;AAAA,qCAAiC;AACjC,kFAA6E;AAE7E,MAAM,MAAM,GAAG,IAAA,gBAAM,GAAE,CAAC;AAGxB,MAAM,CAAC,IAAI,CAAC,cAAc,EAAE,6CAAoB,CAAC,WAAW,CAAC,CAAC;AAG9D,MAAM,CAAC,GAAG,CAAC,qBAAqB,EAAE,6CAAoB,CAAC,WAAW,CAAC,CAAC;AAEpE,kBAAe,MAAM,CAAC"}
