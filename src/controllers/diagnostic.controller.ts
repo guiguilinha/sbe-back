@@ -21,7 +21,11 @@ export class DiagnosticController {
       // O token do Directus é usado para acesso ao banco de dados.
       // A validação do token Keycloak pode ser adicionada no futuro se necessário para autorização.
 
-      const result = await this.persistenceService.saveCompleteDiagnostic(requestData, directusToken);
+      const result = await this.persistenceService.saveCompleteDiagnostic(
+        requestData, 
+        directusToken,
+        keycloakToken // Passar token do Keycloak para Meta Sebrae
+      );
 
       res.status(201).json(result);
     } catch (error) {

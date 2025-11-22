@@ -28,7 +28,7 @@ async function testMySQLConnection() {
   try {
     // 1. Verificar variáveis de ambiente
     console.log('1️⃣ Verificando variáveis de ambiente...');
-    const host = process.env.REGISTRO_MYSQL_HOST || process.env.DEVELOPMENT_REGISTRO_MYSQL_HOST;
+    let host = process.env.REGISTRO_MYSQL_HOST || process.env.DEVELOPMENT_REGISTRO_MYSQL_HOST;
     const port = parseInt(process.env.REGISTRO_MYSQL_PORT || process.env.DEVELOPMENT_REGISTRO_MYSQL_PORT || '3306');
     const user = process.env.REGISTRO_MYSQL_USER || process.env.DEVELOPMENT_REGISTRO_MYSQL_USER;
     const password = process.env.REGISTRO_MYSQL_PASSWORD || process.env.DEVELOPMENT_REGISTRO_MYSQL_PASSWORD;
@@ -42,7 +42,14 @@ async function testMySQLConnection() {
       throw new Error(`Variáveis MySQL não configuradas: ${missing.join(', ')}`);
     }
     
-    console.log(`   ✅ REGISTRO_MYSQL_HOST: ${host}`);
+    // Limpar host: remover protocolo (http://, https://) e porta se presente
+    const originalHost = host;
+    host = host.replace(/^https?:\/\//, '');
+    const hostParts = host.split(':');
+    host = hostParts[0];
+    
+    console.log(`   ✅ REGISTRO_MYSQL_HOST (original): ${originalHost}`);
+    console.log(`   ✅ REGISTRO_MYSQL_HOST (limpo): ${host}`);
     console.log(`   ✅ REGISTRO_MYSQL_PORT: ${port}`);
     console.log(`   ✅ REGISTRO_MYSQL_USER: ${user}`);
     console.log(`   ✅ REGISTRO_MYSQL_DATABASE: ${database}`);

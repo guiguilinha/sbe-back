@@ -13,145 +13,62 @@ export class LegacyQuizService {
     let connection;
     
     try {
-      console.log('🔄 [LegacyQuizService] ===== INÍCIO DO PROCESSAMENTO =====');
-      console.log('📍 [LegacyQuizService] Etapa 0/5: Recebendo e validando dados...');
-      console.log('📊 [LegacyQuizService] Dados recebidos:', {
-        answersCount: request.answers.length,
-        hasUserData: !!request.userData,
-        userEmail: request.userData?.email,
-        hasPreviewToken: !!previewToken,
-        timestamp: new Date().toISOString()
-      });
-
       // ETAPA 1: Criar conexão MySQL
-      console.log('📍 [LegacyQuizService] Etapa 1/5: Criando conexão MySQL...');
       try {
-        console.log('🔌 [MySQL] Tentando criar conexão...');
         connection = await createMySQLConnection();
-        console.log('✅ [MySQL] CONEXÃO ESTABELECIDA COM SUCESSO');
-        console.log('   📊 Status da conexão:', {
+        
+        // Log confirmando conexão com banco legado
+        console.log('✅ [Banco Legado] Conexão estabelecida com sucesso:', JSON.stringify({
           threadId: (connection as any).threadId || 'N/A',
           state: (connection as any).state || 'N/A',
-          connected: 'SIM ✅'
-        });
-        console.log('✅ [LegacyQuizService] Etapa 1/5 COMPLETA: Conexão MySQL criada com sucesso');
+          connected: true,
+          timestamp: new Date().toISOString()
+        }, null, 2));
       } catch (mysqlError) {
-        console.error('❌ [LegacyQuizService] Etapa 1/5 FALHOU: Erro ao criar conexão MySQL');
-        console.error('   Detalhes:', mysqlError instanceof Error ? mysqlError.message : String(mysqlError));
-        console.error('   Stack:', mysqlError instanceof Error ? mysqlError.stack : 'N/A');
+        console.error('❌ [LegacyQuizService] Erro ao criar conexão MySQL:', mysqlError);
         throw new Error(`Erro ao conectar no MySQL: ${mysqlError instanceof Error ? mysqlError.message : String(mysqlError)}`);
       }
 
       // ETAPA 2: REUTILIZAR cálculo já existente (não recalcular!)
-      console.log('📍 [LegacyQuizService] Etapa 2/5: Reutilizando cálculo do ResultsService...');
       let calculatedResult: CalculatedResult;
       try {
-        const calcStartTime = Date.now();
+        // ResultsService.calculateResult não aceita previewToken, apenas answers
         calculatedResult = await ResultsService.calculateResult({ 
-          answers: request.answers as any, // UserAnswer é compatível com AnswerPayload
-          previewToken: previewToken
-        });
-        const calcDuration = Date.now() - calcStartTime;
-        console.log('✅ [LegacyQuizService] Etapa 2/5 COMPLETA: Resultado calculado recebido');
-        console.log('\n📊 [CALCULATED_RESULT] Dados completos do resultado calculado:');
-        console.log(JSON.stringify({
-          total_score: calculatedResult.total_score,
-          general_level: {
-            id: calculatedResult.general_level.id,
-            title: calculatedResult.general_level.title
-          },
-          categories: calculatedResult.categories.map(cat => ({
-            category_id: cat.category_id,
-            score: cat.score,
-            level: {
-              id: cat.level.id,
-              title: cat.level.title
-            }
-          }))
-        }, null, 2));
-        console.log('   📊 Resumo:', {
-          totalScore: calculatedResult.total_score,
-          generalLevel: calculatedResult.general_level.title,
-          categoriesCount: calculatedResult.categories.length,
-          tempo: `${calcDuration}ms`
-        });
-        console.log('   📋 Detalhes por categoria:');
-        calculatedResult.categories.forEach(cat => {
-          console.log(`      - Categoria ${cat.category_id}: ${cat.score} pontos → ${cat.level.title}`);
+          answers: request.answers as any // UserAnswer é compatível com AnswerPayload
         });
       } catch (error) {
-        console.error('❌ [LegacyQuizService] Etapa 2/5 FALHOU: Erro ao calcular resultado');
-        console.error('   Detalhes:', error instanceof Error ? error.message : String(error));
-        console.error('   Stack:', error instanceof Error ? error.stack : 'N/A');
+        console.error('❌ [LegacyQuizService] Erro ao calcular resultado:', error);
         throw new Error(`Erro ao calcular resultado: ${error instanceof Error ? error.message : String(error)}`);
       }
 
       // ETAPA 3: Buscar dados do quiz do Directus para obter textos das respostas
-      console.log('📍 [LegacyQuizService] Etapa 3/5: Buscando textos das respostas no Directus...');
       let answersCache: QuizAnswer[];
       try {
-        const answersStartTime = Date.now();
         const answersService = new AnswersService();
-        answersCache = await answersService.getAnswers(previewToken);
+        // previewToken é opcional - passar apenas se definido
+        answersCache = await answersService.getAnswers(previewToken || undefined);
         this.answersCache = answersCache;
-        const answersDuration = Date.now() - answersStartTime;
-        console.log('✅ [LegacyQuizService] Etapa 3/5 COMPLETA: Textos de respostas carregados');
-        console.log('   📊 Resultado:', {
-          totalRespostas: answersCache.length,
-          tempo: `${answersDuration}ms`
-        });
       } catch (error) {
-        console.error('⚠️ [LegacyQuizService] Etapa 3/5 FALHOU (não crítico): Erro ao buscar textos de respostas');
-        console.error('   Detalhes:', error instanceof Error ? error.message : String(error));
-        console.error('   Stack:', error instanceof Error ? error.stack : 'N/A');
         // Não falha, usa fallback depois
+        console.warn('⚠️ [LegacyQuizService] Erro ao buscar respostas do Directus (usando fallback):', error instanceof Error ? error.message : 'Erro desconhecido');
         this.answersCache = [];
-        console.warn('   ⚠️ Continuando sem cache de respostas (usará fallback baseado em score)');
       }
 
       // ETAPA 4: Mapear dados usando resultado calculado
-      console.log('📍 [LegacyQuizService] Etapa 4/5: Mapeando dados para formato MySQL...');
       let mappedData: LegacyQuizMapping;
       try {
-        const mapStartTime = Date.now();
         mappedData = await this.mapAnswersToLegacyFormat(
           request.answers, 
           calculatedResult,
           request.userData, 
           previewToken
         );
-        const mapDuration = Date.now() - mapStartTime;
-        console.log('✅ [LegacyQuizService] Etapa 4/5 COMPLETA: Dados mapeados com sucesso');
-        console.log('\n📋 [LEGACY_QUIZ_MAPPING] Dados formatados completos para MySQL:');
-        console.log(JSON.stringify(mappedData, null, 2));
-        console.log('   📊 Tempo de mapeamento:', `${mapDuration}ms`);
-        console.log('   📋 Resumo dos dados mapeados:', {
-          niveis: {
-            processo: mappedData.nvl_processo,
-            vendas: mappedData.nvl_vendas,
-            presenca: mappedData.nvl_presenca,
-            com: mappedData.nvl_com,
-            financas: mappedData.nvl_financas,
-            geral: mappedData.nvl_geral
-          },
-          pontuacoes: {
-            processo: mappedData.total_pts_processo,
-            vendas: mappedData.total_pts_venda,
-            presenca: mappedData.total_pts_presenca,
-            com: mappedData.total_pts_com,
-            financas: mappedData.total_pts_financas,
-            geral: mappedData.total_pts
-          }
-        });
       } catch (error) {
-        console.error('❌ [LegacyQuizService] Etapa 4/5 FALHOU: Erro ao mapear dados');
-        console.error('   Detalhes:', error instanceof Error ? error.message : String(error));
-        console.error('   Stack:', error instanceof Error ? error.stack : 'N/A');
+        console.error('❌ [LegacyQuizService] Erro ao mapear dados:', error);
         throw error;
       }
 
       // ETAPA 5: Executar INSERT no MySQL
-      console.log('📍 [LegacyQuizService] Etapa 5/5: Executando INSERT no MySQL...');
       try {
         const sqlStartTime = Date.now();
         
@@ -206,35 +123,44 @@ export class LegacyQuizService {
           mappedData.nvl_geral, mappedData.total_pts
         ];
 
-        console.log('   📝 Query SQL preparada com', params.length, 'parâmetros');
+        // Log dos dados enviados para banco legado
+        console.log('💾 [Banco Legado] Dados enviados para banco legado:', JSON.stringify({
+          nome: mappedData.nome,
+          empresa: mappedData.empresa,
+          email: mappedData.email,
+          uf: mappedData.uf,
+          cidade: mappedData.cidade,
+          niveis: {
+            processo: mappedData.nvl_processo,
+            vendas: mappedData.nvl_vendas,
+            presenca: mappedData.nvl_presenca,
+            com: mappedData.nvl_com,
+            financas: mappedData.nvl_financas,
+            geral: mappedData.nvl_geral
+          },
+          pontuacoes: {
+            processo: mappedData.total_pts_processo,
+            vendas: mappedData.total_pts_venda,
+            presenca: mappedData.total_pts_presenca,
+            com: mappedData.total_pts_com,
+            financas: mappedData.total_pts_financas,
+            geral: mappedData.total_pts
+          },
+          timestamp: new Date().toISOString()
+        }, null, 2));
         
-        // Verificar status da conexão antes do INSERT
-        console.log('\n🔌 [MySQL] Status da conexão ANTES do INSERT:');
-        console.log('   Thread ID:', (connection as any).threadId || 'N/A');
-        console.log('   Estado:', (connection as any).state || 'N/A');
-        console.log('   Conectado: SIM ✅');
-        
-        console.log('\n💾 [MySQL] Executando INSERT...');
         const [result] = await connection.execute(sql, params);
         const sqlDuration = Date.now() - sqlStartTime;
         const totalDuration = Date.now() - startTime;
         
-        console.log('✅ [MySQL] INSERT EXECUTADO COM SUCESSO');
-        console.log('   📊 Resultado do INSERT:', {
+        // Log da resposta do banco legado
+        console.log('✅ [Banco Legado] Resposta do banco legado:', JSON.stringify({
           insertId: (result as any).insertId,
           affectedRows: (result as any).affectedRows,
-          tempoSQL: `${sqlDuration}ms`
-        });
-        console.log('   ✅ Dados gravados no banco:', (result as any).affectedRows > 0 ? 'SIM ✅' : 'NÃO ❌');
-        
-        // Verificar status da conexão após o INSERT
-        console.log('\n🔌 [MySQL] Status da conexão APÓS o INSERT:');
-        console.log('   Thread ID:', (connection as any).threadId || 'N/A');
-        console.log('   Estado:', (connection as any).state || 'N/A');
-        console.log('   Conectado: SIM ✅');
-        
-        console.log('\n✅ [LegacyQuizService] Etapa 5/5 COMPLETA: Dados salvos com sucesso no MySQL');
-        console.log('   ⏱️ Tempo total:', `${totalDuration}ms`);
+          tempoSQL: `${sqlDuration}ms`,
+          tempoTotal: `${totalDuration}ms`,
+          timestamp: new Date().toISOString()
+        }, null, 2));
       
         return { 
           success: true,
@@ -244,19 +170,12 @@ export class LegacyQuizService {
           }
         };
       } catch (sqlError) {
-        console.error('❌ [LegacyQuizService] Etapa 5/5 FALHOU: Erro ao executar SQL');
-        console.error('   Detalhes:', sqlError instanceof Error ? sqlError.message : String(sqlError));
-        console.error('   Stack:', sqlError instanceof Error ? sqlError.stack : 'N/A');
+        console.error('❌ [LegacyQuizService] Erro ao executar SQL:', sqlError);
         throw sqlError;
       }
       
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const errorStack = error instanceof Error ? error.stack : 'N/A';
-      
       console.error('❌ [LegacyQuizService] Erro ao salvar dados:', error);
-      console.error('❌ [LegacyQuizService] Mensagem:', errorMessage);
-      console.error('❌ [LegacyQuizService] Stack:', errorStack);
       
       // Propagar erro para o controller
       throw error;

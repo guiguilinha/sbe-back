@@ -2,16 +2,22 @@ import mysql from 'mysql2/promise';
 
 // Função para obter config MySQL (lê variáveis no momento da chamada)
 const getMySQLConfig = () => {
-  const host = process.env.REGISTRO_MYSQL_HOST || 'localhost';
+  // Limpar host: remover protocolo (http://, https://) e porta se presente
+  let host = process.env.REGISTRO_MYSQL_HOST || 'localhost';
+  
+  // Remover protocolo se presente
+  host = host.replace(/^https?:\/\//, '');
+  
+  // Remover porta se presente no host (ex: localhost:3307 -> localhost)
+  const hostParts = host.split(':');
+  host = hostParts[0];
+  
   const user = process.env.REGISTRO_MYSQL_USER || 'root';
   const password = process.env.REGISTRO_MYSQL_PASSWORD || '';
   const database = process.env.REGISTRO_MYSQL_DATABASE || 'maturidade_digital_db';
   
-  // Porta: dentro do Docker (hosts com mysql-quiz ou IP interno) usa 3306, fora usa porta configurada
-  let port = parseInt(process.env.REGISTRO_MYSQL_PORT || '3306');
-  if (host === 'mysql-quiz' || host.startsWith('172.') || host.includes('mysql-quiz')) {
-    port = 3306; // Porta interna do Docker
-  }
+  // Porta: sempre usar a porta configurada na variável de ambiente, ou padrão 3306
+  const port = parseInt(process.env.REGISTRO_MYSQL_PORT || '3306');
   
   const config = {
     host,
