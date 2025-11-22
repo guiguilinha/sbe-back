@@ -40,7 +40,6 @@ export class KeycloakValidationService {
   async validateIdToken(idToken: string): Promise<KeycloakUserData> {
     try {
       this.loadConfig(); // Recarregar config antes de usar
-      console.log('🔍 [KeycloakValidation] Iniciando validação do token...');
 
       // 1. Decodificar o token sem verificar a assinatura
       const decodedToken = jwt.decode(idToken) as any;
@@ -48,17 +47,6 @@ export class KeycloakValidationService {
       if (!decodedToken) {
         throw new Error('Token inválido ou malformado');
       }
-
-      console.log('🔍 [KeycloakValidation] Token decodificado (resumo):', {
-        iss: decodedToken.iss,
-        aud: decodedToken.aud,
-        sub: decodedToken.sub,
-        exp: decodedToken.exp
-      });
-      
-      // Log COMPLETO do token decodificado
-      console.log('🔍 [KeycloakValidation] === TOKEN COMPLETO DECODIFICADO ===');
-      console.log('🔍 [KeycloakValidation] TODOS os dados do token:', JSON.stringify(decodedToken, null, 2));
 
       // 2. Verificar se o token não expirou
       const currentTime = Math.floor(Date.now() / 1000);
@@ -73,11 +61,22 @@ export class KeycloakValidationService {
       }
 
       // 4. Verificar se o audience está correto
-      if (decodedToken.aud !== 'maturidadedigital') {
-        throw new Error(`Audience inválido. Esperado: maturidadedigital, Recebido: ${decodedToken.aud}`);
+      // O Keycloak pode usar 'aud' (audience) ou 'azp' (authorized party) dependendo da configuração
+      const audience = decodedToken.aud || decodedToken.azp;
+      const expectedAudience = 'maturidadedigital';
+      
+      if (!audience) {
+        throw new Error(`Audience não encontrado no token. Esperado: ${expectedAudience}`);
+      }
+      
+      // Aceitar tanto 'aud' quanto 'azp' se corresponderem ao client ID esperado
+      if (audience !== expectedAudience && decodedToken.azp !== expectedAudience) {
+        throw new Error(`Audience inválido. Esperado: ${expectedAudience}, Recebido: aud=${decodedToken.aud}, azp=${decodedToken.azp}`);
       }
 
-      console.log('✅ [KeycloakValidation] Token validado com sucesso (validação básica)');
+      // Log de login via Keycloak (backend)
+      console.log('🔑 [Keycloak Login] Validação de token realizada com sucesso');
+      console.log('🔑 [Keycloak Login] Dados da resposta:', JSON.stringify(decodedToken, null, 2));
 
       return decodedToken as KeycloakUserData;
 
@@ -94,30 +93,17 @@ export class KeycloakValidationService {
   async getServiceToken(): Promise<string> {
     try {
       this.loadConfig(); // Recarregar config antes de usar
-      console.log('🔑 [KeycloakValidation] Obtendo token de serviço...');
-          console.log('🔑 [KeycloakValidation] === DADOS USADOS PARA CHAMAR KEYCLOAK ===');
-          console.log('🔑 [KeycloakValidation] authServerUrl:', this.authServerUrl);
-          console.log('🔑 [KeycloakValidation] realm:', this.realm);
-          console.log('🔑 [KeycloakValidation] clientId:', this.clientId);
-          console.log('🔑 [KeycloakValidation] clientSecret (primeiros 10 chars):', this.clientSecret.substring(0, 10) + '...');
 
           if (!this.authServerUrl || !this.realm || !this.clientId || !this.clientSecret) {
             throw new Error('Configuração do Keycloak incompleta');
           }
 
           const tokenUrl = `${this.authServerUrl}/realms/${this.realm}/protocol/openid-connect/token`;
-          console.log('🔑 [KeycloakValidation] URL completa do Keycloak:', tokenUrl);
           
           const params = new URLSearchParams();
           params.append('grant_type', 'client_credentials');
           params.append('client_id', this.clientId);
           params.append('client_secret', this.clientSecret);
-          
-          console.log('🔑 [KeycloakValidation] Parâmetros enviados:', {
-            grant_type: 'client_credentials',
-            client_id: this.clientId,
-            client_secret: this.clientSecret.substring(0, 10) + '...'
-          });
 
       const response = await axios.post(tokenUrl, params, {
         headers: {
@@ -126,14 +112,7 @@ export class KeycloakValidationService {
         timeout: 10000
       });
 
-      console.log('🔍 [KeycloakValidation] === RESPOSTA COMPLETA DO KEYCLOAK ===');
-      console.log('🔍 [KeycloakValidation] Status:', response.status);
-      console.log('🔍 [KeycloakValidation] Headers:', JSON.stringify(response.headers, null, 2));
-      console.log('🔍 [KeycloakValidation] Data (completa):', JSON.stringify(response.data, null, 2));
-
       if (response.data.access_token) {
-        console.log('✅ [KeycloakValidation] Token de serviço obtido com sucesso');
-        console.log('✅ [KeycloakValidation] Token (primeiros 50 chars):', response.data.access_token.substring(0, 50) + '...');
         return response.data.access_token;
       } else {
         throw new Error('Token de acesso não encontrado na resposta');

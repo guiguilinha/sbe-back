@@ -2,7 +2,7 @@
  * Schema de validação para dados de diagnóstico usando Zod
  */
 
-import { z } from 'zod';
+import { z, type ZodIssue } from 'zod';
 
 /**
  * Schema de validação para resposta de categoria
@@ -50,7 +50,7 @@ export function validateDiagnosticData(data: unknown): { success: boolean; error
     return { success: true, data: validated };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessage = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      const errorMessage = error.issues.map((e: ZodIssue) => `${e.path.join('.')}: ${e.message}`).join(', ');
       return { success: false, error: errorMessage };
     }
     return { success: false, error: 'Erro de validação desconhecido' };

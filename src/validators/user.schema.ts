@@ -2,7 +2,7 @@
  * Schema de validação para dados de usuário usando Zod
  */
 
-import { z } from 'zod';
+import { z, type ZodIssue } from 'zod';
 
 /**
  * Valida CPF (formato e dígitos verificadores)
@@ -51,21 +51,24 @@ function validateCPF(cpf: string): boolean {
  * Schema de validação para dados de usuário
  */
 export const userSchema = z.object({
-  given_name: z.string().min(1, 'Nome é obrigatório').max(100, 'Nome muito longo'),
-  last_name: z.string().min(1, 'Sobrenome é obrigatório').max(100, 'Sobrenome muito longo'),
+  given_name: z.union([z.string().max(100, 'Nome muito longo'), z.literal('')]).optional(),
+  last_name: z.union([z.string().max(100, 'Sobrenome muito longo'), z.literal('')]).optional(),
   cpf: z.string()
     .min(11, 'CPF deve ter 11 dígitos')
     .max(14, 'CPF inválido')
     .refine((cpf) => validateCPF(cpf), {
       message: 'CPF inválido (dígitos verificadores incorretos)'
     }),
-  data_nascimento: z.string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data deve estar no formato YYYY-MM-DD')
-    .optional()
-    .or(z.literal('')),
-  genero: z.string().optional(),
-  uf: z.string().length(2, 'UF deve ter 2 caracteres').optional(),
-  cidade: z.string().max(100, 'Cidade muito longa').optional(),
+  data_nascimento: z.union([
+    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data deve estar no formato YYYY-MM-DD'),
+    z.literal('')
+  ]).optional(),
+  genero: z.union([z.string(), z.literal('')]).optional(),
+  uf: z.union([
+    z.string().length(2, 'UF deve ter 2 caracteres'),
+    z.literal('')
+  ]).optional(),
+  cidade: z.union([z.string().max(100, 'Cidade muito longa'), z.literal('')]).optional(),
   email: z.string()
     .email('Email inválido')
     .max(255, 'Email muito longo')
@@ -84,13 +87,19 @@ export const createUserSchema = userSchema.partial().required({
  */
 export function validateUserData(data: unknown): { success: boolean; error?: string; data?: z.infer<typeof userSchema> } {
   try {
+    console.log('[validateUserData] Dados recebidos para validação:', JSON.stringify(data, null, 2));
     const validated = userSchema.parse(data);
+    console.log('[validateUserData] Validação bem-sucedida');
     return { success: true, data: validated };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessage = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      console.error('[validateUserData] Erros de validação Zod:', JSON.stringify({
+        issues: error.issues
+      }, null, 2));
+      const errorMessage = error.issues.map((e: ZodIssue) => `${e.path.join('.')}: ${e.message}`).join(', ');
       return { success: false, error: errorMessage };
     }
+    console.error('[validateUserData] Erro desconhecido:', error);
     return { success: false, error: 'Erro de validação desconhecido' };
   }
 }

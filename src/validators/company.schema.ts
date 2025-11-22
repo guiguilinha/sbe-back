@@ -2,7 +2,7 @@
  * Schema de validação para dados de empresa usando Zod
  */
 
-import { z } from 'zod';
+import { z, type ZodIssue } from 'zod';
 
 /**
  * Valida CNPJ (formato e dígitos verificadores)
@@ -82,7 +82,7 @@ export function validateCompanyData(data: unknown): { success: boolean; error?: 
     return { success: true, data: validated };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessage = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+      const errorMessage = error.issues.map((e: ZodIssue) => `${e.path.join('.')}: ${e.message}`).join(', ');
       return { success: false, error: errorMessage };
     }
     return { success: false, error: 'Erro de validação desconhecido' };

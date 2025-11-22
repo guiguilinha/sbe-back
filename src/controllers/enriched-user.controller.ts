@@ -4,9 +4,13 @@
  */
 
 import { Request, Response } from 'express';
+import axios from 'axios';
 import { getKeycloakValidationService } from '../services/keycloak-validation.service';
 import { getCpeBackendService } from '../services/cpe-backend.service';
 import { dataMappingService } from '../services/data-mapping.service';
+import { CompanySyncService } from '../services/company/company-sync.service';
+import { UsersService } from '../services/directus/persistence/users.service';
+import { CompaniesService } from '../services/company/companies.service';
 import { EnrichedUserData, EnrichUserDataResponse } from '../contracts/enriched-user.types';
 
 export class EnrichedUserController {
@@ -19,8 +23,6 @@ export class EnrichedUserController {
     const startTime = Date.now();
     
     try {
-      console.log('🚀 [EnrichedUser] Iniciando enriquecimento de dados do usuário...');
-
       // 1. Extrair token do header Authorization
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -29,22 +31,13 @@ export class EnrichedUserController {
     }
 
     const idToken = authHeader.replace('Bearer ', '');
-    console.log('🔍 [EnrichedUser] Token extraído do header');
 
           // 2. Validar token com Keycloak
-    console.log('🔍 [EnrichedUser] Validando token com Keycloak...');
     const keycloakValidationService = getKeycloakValidationService();
     const keycloakUserData = await keycloakValidationService.validateIdToken(idToken);
     
-      // 2.1. Log detalhado dos dados brutos do usuário
-    console.log('👤 [EnrichedUser] === DADOS BRUTOS DO USUÁRIO ===');
-    console.log('👤 [EnrichedUser] Dados completos do token Keycloak:', JSON.stringify(keycloakUserData, null, 2));
-    
       // 3. Mapear dados do usuário
-      console.log('🔄 [EnrichedUser] Mapeando dados do usuário...');
-      console.log('🔄 [EnrichedUser] Dados que serão mapeados:', JSON.stringify(keycloakUserData, null, 2));
       const processedUserData = dataMappingService.mapKeycloakUserData(keycloakUserData);
-      console.log('🔄 [EnrichedUser] Dados mapeados resultantes:', JSON.stringify(processedUserData, null, 2));
       
       // 4. Validar dados essenciais do usuário
       if (!dataMappingService.validateUserData(processedUserData)) {
@@ -54,62 +47,144 @@ export class EnrichedUserController {
 
       // 5. Extrair CPF para busca da empresa
       const cpf = keycloakValidationService.extractCpfFromToken(keycloakUserData);
-      console.log('🔍 [EnrichedUser] CPF extraído do token:', cpf);
       
-        // 6. Buscar dados das empresas (opcional)
-        let empresasData: any[] = [];
-        const cpeBackendService = getCpeBackendService();
-        if (cpeBackendService.isConfigured()) {
-          console.log('🏢 [EnrichedUser] Buscando dados das empresas...');
-          console.log('🔍 [EnrichedUser] CPF usado na busca:', cpf);
-          console.log('🔍 [EnrichedUser] URL da API CPE:', process.env.CPE_BACKEND_URL);
-          
-          try {
-            // Obter token de serviço do Keycloak
-            console.log('🔑 [EnrichedUser] Obtendo token de serviço...');
-            const serviceToken = await keycloakValidationService.getServiceToken();
-            
-            // Fazer chamada bruta para a API CPE para ver resposta completa
-            console.log('🔍 [EnrichedUser] === CHAMADA BRUTA PARA API CPE ===');
-            const rawResponse = await cpeBackendService.getRawEmpresaData(cpf, serviceToken);
-            console.log('🏢 [EnrichedUser] === DADOS BRUTOS DAS EMPRESAS ===');
-            console.log('🏢 [EnrichedUser] Resposta bruta da API CPE:', JSON.stringify(rawResponse, null, 2));
-            
-            // Usar os dados brutos diretamente (já é um array)
-            if (Array.isArray(rawResponse)) {
-              empresasData = rawResponse;
-              console.log('✅ [EnrichedUser] Dados das empresas obtidos:', {
-                totalEmpresas: empresasData.length,
-                empresas: empresasData.map(emp => ({
-                  cnpj: emp.cnpj,
-                  nome: emp.nome,
-                  isPrincipal: emp.isPrincipal,
-                  codStatusEmpresa: emp.codStatusEmpresa,
-                  desTipoVinculo: emp.desTipoVinculo
-                }))
-              });
-    } else {
-              console.log('ℹ️ [EnrichedUser] Resposta não é um array:', typeof rawResponse);
-            }
-          } catch (empresaError) {
-            console.warn('⚠️ [EnrichedUser] Erro ao buscar dados das empresas:', empresaError);
-            console.warn('⚠️ [EnrichedUser] Continuando sem dados das empresas...');
-            // Continua sem dados das empresas - não é um erro crítico
-          }
+      // 6. Verificar/Atualizar/Criar usuário no Directus com comparação de dados
+      console.log('👤 [EnrichedUser] Iniciando verificação/atualização de usuário no Directus...');
+      console.log('👤 [EnrichedUser] Dados do Keycloak:', JSON.stringify({
+        cpf: cpf,
+        given_name: processedUserData.given_name,
+        last_name: processedUserData.lastName,
+        email: processedUserData.email,
+        genero: processedUserData.genero,
+        uf: processedUserData.uf,
+        cidade: processedUserData.cidade,
+        data_nascimento: processedUserData.dataNascimento
+      }, null, 2));
+      
+      const usersService = new UsersService();
+      const directusToken = process.env.DIRECTUS_TOKEN;
+      
+      const userDataForDirectus = {
+        given_name: processedUserData.given_name || '',
+        last_name: processedUserData.lastName || '',
+        cpf: cpf,
+        data_nascimento: processedUserData.dataNascimento || '',
+        genero: processedUserData.genero || '',
+        uf: processedUserData.uf || '',
+        cidade: processedUserData.cidade || '',
+        email: processedUserData.email || ''
+      };
+      
+      const directusUser = await usersService.findOrUpdateUser(userDataForDirectus, directusToken);
+      
+      console.log('✅ [EnrichedUser] Usuário verificado/atualizado no Directus:', JSON.stringify({
+        userId: directusUser.id,
+        cpf: directusUser.cpf,
+        given_name: directusUser.given_name,
+        last_name: directusUser.last_name,
+        email: directusUser.email
+      }, null, 2));
+      
+      // 7. Sincronizar empresas CPE ↔ Directus
+      console.log('🔄 [EnrichedUser] Iniciando sincronização de empresas CPE ↔ Directus...');
+      console.log('🔄 [EnrichedUser] Parâmetros:', JSON.stringify({
+        cpf: cpf,
+        userId: directusUser.id
+      }, null, 2));
+      
+      const companySyncService = new CompanySyncService();
+      let syncResult;
+      let empresasData: any[] = [];
+      
+      try {
+        syncResult = await companySyncService.syncUserCompanies(cpf, directusUser.id);
+        
+        // Verificar se syncResult existe e tem companies
+        if (!syncResult) {
+          console.warn('⚠️ [EnrichedUser] syncResult é undefined');
+          empresasData = [];
+        } else if (!syncResult.companies) {
+          console.warn('⚠️ [EnrichedUser] syncResult.companies é undefined');
+          empresasData = [];
         } else {
-          console.warn('⚠️ [EnrichedUser] Serviço CPE Backend não configurado');
-          console.warn('⚠️ [EnrichedUser] Configuração:', cpeBackendService.getConfigInfo());
+          empresasData = Array.isArray(syncResult.companies) ? syncResult.companies : [];
         }
+        
+        console.log('🔄 [EnrichedUser] Sincronização de empresas realizada:', JSON.stringify({
+          hasSyncResult: !!syncResult,
+          hasCompanies: syncResult?.hasCompanies || false,
+          companiesCount: syncResult?.companiesCount || 0,
+          source: syncResult?.source || 'unknown',
+          action: syncResult?.action || 'unknown',
+          syncPerformed: syncResult?.syncPerformed || false,
+          empresasDataIsArray: Array.isArray(empresasData),
+          empresasDataLength: empresasData.length,
+          empresas: (empresasData && Array.isArray(empresasData)) ? empresasData.map((emp: any) => ({
+            // IMPORTANTE: Usar company_id.id (ID da empresa) e não emp.id (ID da relação user_companies)
+            id: emp.company_id?.id || emp.id,
+            cnpj: emp.cnpj || emp.company_id?.cnpj,
+            nome: emp.nome || emp.company_id?.nome,
+            isPrincipal: emp.is_principal || emp.isPrincipal
+          })) : []
+        }, null, 2));
+      } catch (syncError) {
+        console.error('❌ [EnrichedUser] Erro na sincronização de empresas:', syncError);
+        console.error('❌ [EnrichedUser] Stack do erro:', syncError instanceof Error ? syncError.stack : 'Sem stack');
+        // Garantir que empresasData seja sempre um array
+        empresasData = [];
+        syncResult = undefined;
+        // Continua sem sincronização - não é um erro crítico
+      }
 
-      // 7. Mapear dados das empresas
-      console.log('🔄 [EnrichedUser] Mapeando dados das empresas...');
-      const empresasMapeadas = dataMappingService.mapCpeEmpresaData(empresasData);
+      // 8. Se não houver empresas após sincronização, manter hasEmpresaData: false
+      // A criação de empresa (real ou fictícia) será feita pelo usuário no modal do quiz
+      if (!syncResult || !syncResult.hasCompanies || !empresasData || empresasData.length === 0) {
+        console.log('⚠️ [EnrichedUser] Nenhuma empresa encontrada - hasEmpresaData será false');
+        empresasData = [];
+      }
       
-      // 8. Combinar dados do usuário e empresas
-      console.log('🔄 [EnrichedUser] Combinando dados...');
+      // Garantir que empresasData seja sempre um array antes de continuar
+      if (!empresasData || !Array.isArray(empresasData)) {
+        console.warn('⚠️ [EnrichedUser] empresasData não é um array, inicializando como array vazio');
+        empresasData = [];
+      }
+
+      // 9. Mapear dados das empresas para formato esperado pelo frontend
+      // Verificação final antes de mapear
+      if (!empresasData || !Array.isArray(empresasData)) {
+        console.error('❌ [EnrichedUser] empresasData não é um array antes do mapeamento:', typeof empresasData, empresasData);
+        empresasData = [];
+      }
+      
+      console.log('🔄 [EnrichedUser] Mapeando empresas para formato do frontend:', JSON.stringify({
+        total: empresasData ? empresasData.length : 0,
+        empresas: (empresasData && Array.isArray(empresasData)) ? empresasData.slice(0, 2) : [] // Mostrar apenas as 2 primeiras para não poluir o log
+      }, null, 2));
+      
+      // Verificação final antes de mapear
+      if (!empresasData || !Array.isArray(empresasData)) {
+        console.error('❌ [EnrichedUser] ERRO CRÍTICO: empresasData não é um array antes do map final:', typeof empresasData, empresasData);
+        empresasData = [];
+      }
+      
+      const empresasMapeadas = empresasData.map((emp: any) => ({
+        // IMPORTANTE: Usar company_id.id (ID da empresa) e não emp.id (ID da relação user_companies)
+        id: emp.company_id?.id || emp.id || '',
+        cnpj: emp.cnpj || emp.company_id?.cnpj || '',
+        nome: emp.nome || emp.company_id?.nome || 'Empresa',
+        isPrincipal: emp.is_principal || emp.isPrincipal || false,
+        codStatusEmpresa: emp.cod_status_empresa || emp.codStatusEmpresa || '',
+        desTipoVinculo: emp.des_tipo_vinculo || emp.desTipoVinculo || ''
+      }));
+      
+      console.log('✅ [EnrichedUser] Empresas mapeadas:', JSON.stringify({
+        total: empresasMapeadas.length
+      }, null, 2));
+      
+      // 10. Combinar dados do usuário e empresas
       const enrichedData = dataMappingService.combineUserAndEmpresaData(processedUserData, empresasMapeadas);
 
-      // 9. Criar dados seguros para o frontend (INCLUINDO dados das empresas)
+      // 11. Criar dados seguros para o frontend (INCLUINDO dados das empresas)
       const frontendSafeData = {
         user: enrichedData.user,
         empresas: enrichedData.empresas, // Incluir array de empresas
@@ -121,7 +196,7 @@ export class EnrichedUserController {
         }
       };
 
-      // 10. Criar resumo para logs
+      // 12. Criar resumo para logs
       const dataSummary = dataMappingService.createDataSummary(enrichedData);
       
       const processingTime = Date.now() - startTime;
@@ -131,15 +206,21 @@ export class EnrichedUserController {
         frontendSafe: true
       });
 
-      // 11. Retornar dados seguros para o frontend (COM dados das empresas)
+      // 13. Retornar dados seguros para o frontend (COM dados das empresas)
       res.status(200).json(frontendSafeData);
 
     } catch (error) {
       const processingTime = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+      const errorStack = error instanceof Error ? error.stack : 'Sem stack';
+      
       console.error('❌ [EnrichedUser] Erro no enriquecimento de dados:', {
-        error: error instanceof Error ? error.message : 'Erro desconhecido',
+        error: errorMessage,
+        stack: errorStack,
         processingTime: `${processingTime}ms`
       });
+      console.error('❌ [EnrichedUser] Tipo do erro:', typeof error);
+      console.error('❌ [EnrichedUser] Erro completo:', error);
     
     if (error instanceof Error) {
       if (error.message.includes('Token expirado') || error.message.includes('Token inválido')) {
@@ -147,7 +228,7 @@ export class EnrichedUserController {
       } else if (error.message.includes('CPF não encontrado')) {
         this.sendError(res, 400, 'CPF não encontrado no token do usuário');
       } else {
-        this.sendError(res, 500, `Erro interno: ${error.message}`);
+        this.sendError(res, 500, `Erro interno: ${errorMessage}`);
       }
     } else {
       this.sendError(res, 500, 'Erro interno desconhecido');

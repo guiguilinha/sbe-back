@@ -31,14 +31,41 @@ export class CompanySyncService {
    */
   async syncUserCompanies(cpf: string, userId: number): Promise<CompanySyncResult> {
     try {
+      console.log('🔄 [CompanySync] Iniciando sincronização de empresas...');
+      console.log('🔄 [CompanySync] Parâmetros:', JSON.stringify({ cpf, userId }, null, 2));
+      
       // 1. MÉTODO 1: Buscar empresas no CPE Backend
+      console.log('🔄 [CompanySync] Buscando empresas no CPE Backend...');
       const cpeCompanies = await this.fetchCpeCompanies(cpf);
+      console.log('🔄 [CompanySync] Empresas encontradas no CPE:', JSON.stringify({
+        total: cpeCompanies.length,
+        empresas: cpeCompanies.map((emp: any) => ({
+          cnpj: emp.cnpj,
+          nome: emp.nome,
+          isPrincipal: emp.isPrincipal
+        }))
+      }, null, 2));
       
       // 2. MÉTODO 2: Buscar empresas no Directus
+      console.log('🔄 [CompanySync] Buscando empresas no Directus...');
       const directusCompanies = await this.fetchDirectusCompanies(userId);
+      console.log('🔄 [CompanySync] Empresas encontradas no Directus:', JSON.stringify({
+        total: directusCompanies ? directusCompanies.length : 0,
+        empresas: (directusCompanies && Array.isArray(directusCompanies)) ? directusCompanies.map((emp: any) => ({
+          id: emp.id,
+          cnpj: emp.cnpj || emp.company_id?.cnpj,
+          nome: emp.nome || emp.company_id?.nome,
+          isPrincipal: emp.is_principal
+        })) : []
+      }, null, 2));
       
       // 3. MÉTODO 3: Sincronizar dados (se necessário)
+      console.log('🔄 [CompanySync] Iniciando sincronização de dados...');
       const syncResult = await this.performSync(userId, cpeCompanies, directusCompanies);
+      console.log('🔄 [CompanySync] Sincronização concluída:', JSON.stringify({
+        totalEmpresas: syncResult.companies.length,
+        syncPerformed: syncResult.syncPerformed
+      }, null, 2));
       
       // 4. Determinar ação necessária
       const action = this.determineAction(syncResult.companies);
@@ -51,6 +78,14 @@ export class CompanySyncService {
         action,
         syncPerformed: syncResult.syncPerformed
       };
+      
+      console.log('✅ [CompanySync] Sincronização finalizada:', JSON.stringify({
+        hasCompanies: finalResult.hasCompanies,
+        companiesCount: finalResult.companiesCount,
+        source: finalResult.source,
+        action: finalResult.action,
+        syncPerformed: finalResult.syncPerformed
+      }, null, 2));
       
       return finalResult;
 
@@ -102,7 +137,19 @@ export class CompanySyncService {
     try {
       const companies = await this.companiesService.getUserCompanies(userId);
       
+      // Garantir que companies seja sempre um array
+      if (!companies || !Array.isArray(companies)) {
+        console.warn('⚠️ [CompanySync] companies não é um array, retornando array vazio');
+        return [];
+      }
+      
       const normalizedCompanies = companies.map(company => {
+        // Verificar se company_id existe antes de acessar
+        if (!company || !company.company_id) {
+          console.warn('⚠️ [CompanySync] company ou company_id é undefined:', company);
+          return null;
+        }
+        
         const cnpj = company.company_id.cnpj;
         const nome = company.company_id.nome;
         
@@ -112,7 +159,7 @@ export class CompanySyncService {
           nome,
           source: 'directus'
         };
-      });
+      }).filter(company => company !== null); // Remover nulls
       
       return normalizedCompanies;
     } catch (error) {
@@ -135,11 +182,29 @@ export class CompanySyncService {
         );
 
         if (existingDirectus) {
+          console.log('🔄 [CompanySync] Empresa já existe no Directus, comparando dados...');
+          console.log('🔄 [CompanySync] Dados do CPE:', JSON.stringify({
+            cnpj: cpeCompany.cnpj,
+            nome: cpeCompany.nome,
+            isPrincipal: cpeCompany.isPrincipal,
+            codStatusEmpresa: cpeCompany.codStatusEmpresa,
+            desTipoVinculo: cpeCompany.desTipoVinculo
+          }, null, 2));
+          console.log('🔄 [CompanySync] Dados no Directus:', JSON.stringify({
+            cnpj: existingDirectus.cnpj || existingDirectus.company_id?.cnpj,
+            nome: existingDirectus.nome || existingDirectus.company_id?.nome,
+            isPrincipal: existingDirectus.is_principal,
+            codStatusEmpresa: existingDirectus.cod_status_empresa,
+            desTipoVinculo: existingDirectus.des_tipo_vinculo
+          }, null, 2));
+          
           const needsUpdate = this.compareCompanyData(cpeCompany, existingDirectus);
           
           if (needsUpdate) {
+            console.log('⚠️ [CompanySync] Dados diferentes detectados, atualizando empresa no Directus...');
             await this.updateCompanyInDirectus(existingDirectus, cpeCompany);
             syncPerformed = true;
+            console.log('✅ [CompanySync] Empresa atualizada no Directus');
             
             const directusIndex = finalCompanies.findIndex(d => 
               this.normalizeCnpj(d.company_id?.cnpj || d.cnpj) === this.normalizeCnpj(cpeCompany.cnpj)
@@ -153,11 +218,19 @@ export class CompanySyncService {
                 des_tipo_vinculo: cpeCompany.desTipoVinculo || ''
               };
             }
+          } else {
+            console.log('✅ [CompanySync] Dados da empresa estão atualizados, sem necessidade de atualização');
           }
         } else {
+          console.log('➕ [CompanySync] Empresa não existe no Directus, criando nova empresa...');
           const newCompany = await this.createCompanyFromCpe(userId, cpeCompany);
           finalCompanies.push(newCompany);
           syncPerformed = true;
+          console.log('✅ [CompanySync] Nova empresa criada no Directus:', JSON.stringify({
+            id: newCompany.id,
+            cnpj: newCompany.cnpj,
+            nome: newCompany.nome
+          }, null, 2));
         }
       }
     }
@@ -252,10 +325,19 @@ export class CompanySyncService {
         { headers: { Authorization: `Bearer ${directusToken}` } }
       );
       
+      // Retornar no formato esperado (com company_id como objeto)
+      // IMPORTANTE: O ID principal deve ser o ID da empresa (company_id.id), não o ID da relação (user_companies.id)
+      const companyId = createdCompany.data.data.id;
+      const userCompanyId = userCompany.data.data.id;
+      
       return {
-        id: userCompany.data.data.id,
+        id: userCompanyId, // ID da relação user_companies (mantido para compatibilidade)
         user_id: userId,
-        company_id: createdCompany.data.data.id,
+        company_id: {
+          id: companyId, // ID da empresa (companies.id) - este é o ID correto a ser usado
+          cnpj: createdCompany.data.data.cnpj,
+          nome: createdCompany.data.data.nome
+        },
         cnpj: createdCompany.data.data.cnpj,
         nome: createdCompany.data.data.nome,
         is_principal: userCompanyData.is_principal,
