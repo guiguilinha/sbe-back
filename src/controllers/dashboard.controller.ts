@@ -1,32 +1,57 @@
 import { Request, Response } from 'express';
 import { DashboardService } from '../services/dashboard.service';
+import { getKeycloakValidationService } from '../services/keycloak-validation.service';
+import { UsersService } from '../services/directus/persistence/users.service';
+import { UnauthorizedError, NotFoundError } from '../utils/AppError';
 
 export class DashboardController {
   /**
    * GET /api/dashboard
    * Retorna dados completos do dashboard
+   * Requer autenticação via token Keycloak
    */
   static async getDashboard(req: Request, res: Response) {
     try {
-      console.log('[DashboardController] getDashboard - Iniciando busca de dados completos');
-      
-      const data = await DashboardService.getDashboardData();
-      
-      console.log('[DashboardController] getDashboard - Dados encontrados:', {
-        hasUser: !!data.user,
-        hasCategories: !!data.categories,
-        hasEvolution: !!data.evolution,
-        categoriesCount: data.categories?.length || 0
-      });
-      
+      const userId = await DashboardController.extractUserIdFromToken(req);
+      const directusToken = process.env.DIRECTUS_TOKEN;
+      const data = await DashboardService.getDashboardData(userId, directusToken);
+
       res.json(data);
     } catch (error) {
-      console.error('❌ Error in getDashboard:', error);
-      res.status(500).json({ 
-        message: 'Failed to load dashboard data',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      DashboardController.handleError(res, error, 'Failed to load dashboard data');
     }
+  }
+
+  /**
+   * Helper para extrair userId do token
+   */
+  private static async extractUserIdFromToken(req: Request): Promise<number> {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedError('Token de autorização não fornecido ou formato inválido');
+    }
+
+    const idToken = authHeader.replace('Bearer ', '');
+    const keycloakValidationService = getKeycloakValidationService();
+
+    let keycloakUserData;
+    try {
+      keycloakUserData = await keycloakValidationService.validateIdToken(idToken);
+    } catch (err) {
+      throw new UnauthorizedError('Token inválido ou expirado');
+    }
+
+    const cpf = keycloakValidationService.extractCpfFromToken(keycloakUserData);
+
+    const usersService = new UsersService();
+    const directusToken = process.env.DIRECTUS_TOKEN;
+    const user = await usersService.getUserByCpf(cpf, directusToken);
+
+    if (!user) {
+      throw new NotFoundError('Usuário não encontrado. Por favor, realize um diagnóstico primeiro.');
+    }
+
+    return user.id;
   }
 
   /**
@@ -35,23 +60,13 @@ export class DashboardController {
    */
   static async getEvolutionGeneral(req: Request, res: Response) {
     try {
-      console.log('[DashboardController] getEvolutionGeneral - Iniciando busca de evolução geral');
-      
-      const data = await DashboardService.getEvolutionGeneralData();
-      
-      console.log('[DashboardController] getEvolutionGeneral - Dados encontrados:', {
-        hasData: !!data.data,
-        dataLength: data.data?.length || 0,
-        hasPerformance: !!data.performance
-      });
-      
+      const userId = await DashboardController.extractUserIdFromToken(req);
+      const directusToken = process.env.DIRECTUS_TOKEN;
+      const data = await DashboardService.getEvolutionGeneralData(userId, directusToken);
+
       res.json(data);
     } catch (error) {
-      console.error('❌ Error in getEvolutionGeneral:', error);
-      res.status(500).json({ 
-        message: 'Failed to load general evolution data',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      DashboardController.handleError(res, error, 'Failed to load general evolution data');
     }
   }
 
@@ -61,23 +76,13 @@ export class DashboardController {
    */
   static async getEvolutionCategories(req: Request, res: Response) {
     try {
-      console.log('[DashboardController] getEvolutionCategories - Iniciando busca de evolução por categorias');
-      
-      const data = await DashboardService.getEvolutionCategoriesData();
-      
-      console.log('[DashboardController] getEvolutionCategories - Dados encontrados:', {
-        hasData: !!data.data,
-        dataLength: data.data?.length || 0,
-        hasPerformance: !!data.performance
-      });
-      
+      const userId = await DashboardController.extractUserIdFromToken(req);
+      const directusToken = process.env.DIRECTUS_TOKEN;
+      const data = await DashboardService.getEvolutionCategoriesData(userId, directusToken);
+
       res.json(data);
     } catch (error) {
-      console.error('❌ Error in getEvolutionCategories:', error);
-      res.status(500).json({ 
-        message: 'Failed to load categories evolution data',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      DashboardController.handleError(res, error, 'Failed to load categories evolution data');
     }
   }
 
@@ -87,23 +92,13 @@ export class DashboardController {
    */
   static async getPerformanceGeneral(req: Request, res: Response) {
     try {
-      console.log('[DashboardController] getPerformanceGeneral - Iniciando busca de performance geral');
-      
-      const data = await DashboardService.getPerformanceGeneralData();
-      
-      console.log('[DashboardController] getPerformanceGeneral - Dados encontrados:', {
-        percentage: data.percentage,
-        trend: data.trend,
-        period: data.period
-      });
-      
+      const userId = await DashboardController.extractUserIdFromToken(req);
+      const directusToken = process.env.DIRECTUS_TOKEN;
+      const data = await DashboardService.getPerformanceGeneralData(userId, directusToken);
+
       res.json(data);
     } catch (error) {
-      console.error('❌ Error in getPerformanceGeneral:', error);
-      res.status(500).json({ 
-        message: 'Failed to load general performance data',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      DashboardController.handleError(res, error, 'Failed to load general performance data');
     }
   }
 
@@ -114,25 +109,13 @@ export class DashboardController {
   static async getPerformanceCategory(req: Request, res: Response) {
     try {
       const { categoryId } = req.params;
-      
-      console.log('[DashboardController] getPerformanceCategory - Iniciando busca de performance para categoria:', categoryId);
-      
-      const data = await DashboardService.getPerformanceCategoryData(categoryId);
-      
-      console.log('[DashboardController] getPerformanceCategory - Dados encontrados:', {
-        categoryId,
-        percentage: data.percentage,
-        trend: data.trend,
-        period: data.period
-      });
-      
+      const userId = await DashboardController.extractUserIdFromToken(req);
+      const directusToken = process.env.DIRECTUS_TOKEN;
+      const data = await DashboardService.getPerformanceCategoryData(categoryId, userId, directusToken);
+
       res.json(data);
     } catch (error) {
-      console.error('❌ Error in getPerformanceCategory:', error);
-      res.status(500).json({ 
-        message: 'Failed to load category performance data',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      DashboardController.handleError(res, error, 'Failed to load category performance data');
     }
   }
 
@@ -142,20 +125,30 @@ export class DashboardController {
    */
   static async getLevelLabels(req: Request, res: Response) {
     try {
-      console.log('[DashboardController] getLevelLabels - Buscando levelLabels...');
-      
-      const data = await DashboardService.getDashboardData();
+      const userId = await DashboardController.extractUserIdFromToken(req);
+      const directusToken = process.env.DIRECTUS_TOKEN;
+      const data = await DashboardService.getDashboardData(userId, directusToken);
       const levelLabels = data.evolution?.levelLabels || [];
-      
-      console.log('[DashboardController] getLevelLabels - LevelLabels encontrados:', levelLabels);
-      
+
       res.json({ levelLabels });
     } catch (error) {
-      console.error('❌ Error in getLevelLabels:', error);
-      res.status(500).json({ 
-        message: 'Failed to load level labels',
-        error: error instanceof Error ? error.message : 'Unknown error'
+      DashboardController.handleError(res, error, 'Failed to load level labels');
+    }
+  }
+
+  private static handleError(res: Response, error: any, defaultMessage: string) {
+    console.error(`❌ Error: ${defaultMessage}`, error);
+
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        message: error.message,
+        error: error.name
       });
     }
+
+    return res.status(500).json({
+      message: defaultMessage,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }

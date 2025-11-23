@@ -382,9 +382,10 @@ export class DashboardService {
     categories: any[],
     levels: any[]
   ): DashboardResponse['evolution'] {
-    if (diagnostics.length === 0) {
-      return undefined;
-    }
+    try {
+      if (diagnostics.length === 0) {
+        return undefined;
+      }
 
     // Agrupar diagnósticos por mês
     const diagnosticsByMonth = new Map<string, any[]>();
@@ -399,11 +400,20 @@ export class DashboardService {
       diagnosticsByMonth.get(monthKey)!.push(diag);
     });
 
-    // Ordenar meses
-    const sortedMonths = Array.from(diagnosticsByMonth.keys()).sort().reverse();
+    // Ordenar diagnósticos dentro de cada mês (mais recente primeiro)
+    diagnosticsByMonth.forEach((monthDiagnostics, monthKey) => {
+      monthDiagnostics.sort((a, b) => {
+        const dateA = new Date(a.performed_at).getTime();
+        const dateB = new Date(b.performed_at).getTime();
+        return dateB - dateA; // Ordem decrescente (mais recente primeiro)
+      });
+    });
+
+    // Ordenar meses (do mais antigo para o mais recente para o gráfico)
+    const sortedMonths = Array.from(diagnosticsByMonth.keys()).sort();
 
     // Pegar últimos 12 meses
-    const recentMonths = sortedMonths.slice(0, 12).reverse();
+    const recentMonths = sortedMonths.slice(-12);
 
     // Mapear level labels
     const levelLabels = levels.map(l => l.title);
@@ -416,12 +426,21 @@ export class DashboardService {
       }
       
       const latest = monthDiagnostics[0]; // Mais recente do mês
+      
+      // Verificar se latest tem os dados necessários
+      if (!latest || !latest.overall_level_id || latest.overall_score === undefined) {
+        console.warn('[DashboardService] Diagnóstico incompleto no mês', month, latest);
+        return null;
+      }
+      
       const previousMonth = recentMonths[recentMonths.indexOf(month) - 1];
       const previousDiagnostics = previousMonth ? diagnosticsByMonth.get(previousMonth) : null;
       const previous = previousDiagnostics && previousDiagnostics.length > 0 ? previousDiagnostics[0] : null;
 
       const levelIndex = levels.findIndex(l => l.id === latest.overall_level_id);
-      const delta = previous ? latest.overall_score - previous.overall_score : 0;
+      const delta = previous && previous.overall_score !== undefined 
+        ? latest.overall_score - previous.overall_score 
+        : 0;
 
       return {
         month,
@@ -440,6 +459,13 @@ export class DashboardService {
       }
       
       const latest = monthDiagnostics[0];
+      
+      // Verificar se latest tem os dados necessários
+      if (!latest || !latest.categorias || !Array.isArray(latest.categorias)) {
+        console.warn('[DashboardService] Diagnóstico sem categorias no mês', month, latest);
+        return null;
+      }
+      
       const previousMonth = recentMonths[recentMonths.indexOf(month) - 1];
       const previousDiagnostics = previousMonth ? diagnosticsByMonth.get(previousMonth) : null;
       const previous = previousDiagnostics && previousDiagnostics.length > 0 ? previousDiagnostics[0] : null;
@@ -520,6 +546,12 @@ export class DashboardService {
         performance: categoriesPerformance
       }
     };
+    } catch (error) {
+      console.error('[DashboardService] Erro ao calcular evolução:', error);
+      console.error('[DashboardService] Stack:', error instanceof Error ? error.stack : 'N/A');
+      // Retornar undefined em caso de erro para não quebrar o dashboard
+      return undefined;
+    }
   }
 
   /**
