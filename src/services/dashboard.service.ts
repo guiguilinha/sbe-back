@@ -383,14 +383,87 @@ export class DashboardService {
     levels: any[]
   ): DashboardResponse['evolution'] {
     try {
+      console.log('[DashboardService] calculateEvolution - Iniciando cálculo:', {
+        totalDiagnostics: diagnostics.length,
+        diagnosticsDates: diagnostics.map(d => ({
+          id: d.id,
+          performed_at: d.performed_at,
+          dateFormatted: new Date(d.performed_at).toLocaleDateString('pt-BR')
+        }))
+      });
+      
       if (diagnostics.length === 0) {
         return undefined;
       }
 
-    // Agrupar diagnósticos por mês
-    const diagnosticsByMonth = new Map<string, any[]>();
+    // Ordenar todos os diagnósticos por data (do mais antigo para o mais recente)
+    const sortedDiagnostics = [...diagnostics].sort((a, b) => {
+      const dateA = new Date(a.performed_at).getTime();
+      const dateB = new Date(b.performed_at).getTime();
+      return dateA - dateB; // Ordem crescente (mais antigo primeiro)
+    });
     
-    diagnostics.forEach(diag => {
+    console.log('[DashboardService] calculateEvolution - Diagnósticos ordenados:', {
+      total: sortedDiagnostics.length,
+      first: sortedDiagnostics[0] ? {
+        id: sortedDiagnostics[0].id,
+        performed_at: sortedDiagnostics[0].performed_at
+      } : null,
+      last: sortedDiagnostics[sortedDiagnostics.length - 1] ? {
+        id: sortedDiagnostics[sortedDiagnostics.length - 1].id,
+        performed_at: sortedDiagnostics[sortedDiagnostics.length - 1].performed_at
+      } : null
+    });
+
+    // Mapear level labels
+    const levelLabels = levels.map(l => l.title);
+
+    // Calcular dados gerais - usar TODOS os diagnósticos individualmente (não agrupar por mês)
+    // Formatar a data para exibição no gráfico (usar formato de mês abreviado)
+    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    
+    const generalData = sortedDiagnostics.map((diag, index) => {
+      // Verificar se diag tem os dados necessários
+      if (!diag || !diag.overall_level_id || diag.overall_score === undefined) {
+        console.warn('[DashboardService] Diagnóstico incompleto:', diag);
+        return null;
+      }
+      
+      const date = new Date(diag.performed_at);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = `${monthNames[date.getMonth()]}/${String(date.getFullYear()).slice(-2)}`;
+      
+      // Buscar o diagnóstico anterior para calcular delta
+      const previous = index > 0 ? sortedDiagnostics[index - 1] : null;
+
+      const levelIndex = levels.findIndex(l => l.id === diag.overall_level_id);
+      const delta = previous && previous.overall_score !== undefined 
+        ? diag.overall_score - previous.overall_score 
+        : 0;
+
+      return {
+        month: monthKey, // Manter formato YYYY-MM para compatibilidade
+        monthLabel: monthLabel, // Adicionar label formatado para exibição
+        level: levelIndex >= 0 ? levelIndex + 1 : 1, // 1-based index
+        levelLabel: levelIndex >= 0 ? (levels[levelIndex]?.title || 'Sem nível') : 'Sem nível',
+        score: diag.overall_score,
+        delta
+      };
+    }).filter(item => item !== null) as any[];
+    
+    // Extrair meses únicos para o array de meses (usado para filtros)
+    const uniqueMonths = Array.from(new Set(generalData.map(d => d.month))).sort();
+    
+    console.log('[DashboardService] Dados de evolução geral calculados:', {
+      totalDiagnostics: sortedDiagnostics.length,
+      totalDataPoints: generalData.length,
+      uniqueMonths: uniqueMonths.length,
+      months: uniqueMonths
+    });
+    
+    // Agrupar diagnósticos por mês (para categorias - manter compatibilidade)
+    const diagnosticsByMonth = new Map<string, any[]>();
+    sortedDiagnostics.forEach(diag => {
       const date = new Date(diag.performed_at);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       
@@ -399,66 +472,19 @@ export class DashboardService {
       }
       diagnosticsByMonth.get(monthKey)!.push(diag);
     });
-
-    // Ordenar diagnósticos dentro de cada mês (mais recente primeiro)
-    diagnosticsByMonth.forEach((monthDiagnostics, monthKey) => {
-      monthDiagnostics.sort((a, b) => {
-        const dateA = new Date(a.performed_at).getTime();
-        const dateB = new Date(b.performed_at).getTime();
-        return dateB - dateA; // Ordem decrescente (mais recente primeiro)
-      });
-    });
-
-    // Ordenar meses (do mais antigo para o mais recente para o gráfico)
+    
     const sortedMonths = Array.from(diagnosticsByMonth.keys()).sort();
-
-    // Pegar últimos 12 meses
     const recentMonths = sortedMonths.slice(-12);
-
-    // Mapear level labels
-    const levelLabels = levels.map(l => l.title);
-
-    // Calcular dados gerais
-    const generalData = recentMonths.map(month => {
-      const monthDiagnostics = diagnosticsByMonth.get(month);
-      if (!monthDiagnostics || monthDiagnostics.length === 0) {
-        return null;
-      }
-      
-      const latest = monthDiagnostics[0]; // Mais recente do mês
-      
-      // Verificar se latest tem os dados necessários
-      if (!latest || !latest.overall_level_id || latest.overall_score === undefined) {
-        console.warn('[DashboardService] Diagnóstico incompleto no mês', month, latest);
-        return null;
-      }
-      
-      const previousMonth = recentMonths[recentMonths.indexOf(month) - 1];
-      const previousDiagnostics = previousMonth ? diagnosticsByMonth.get(previousMonth) : null;
-      const previous = previousDiagnostics && previousDiagnostics.length > 0 ? previousDiagnostics[0] : null;
-
-      const levelIndex = levels.findIndex(l => l.id === latest.overall_level_id);
-      const delta = previous && previous.overall_score !== undefined 
-        ? latest.overall_score - previous.overall_score 
-        : 0;
-
-      return {
-        month,
-        level: levelIndex >= 0 ? levelIndex + 1 : 1, // 1-based index
-        levelLabel: levelIndex >= 0 ? (levels[levelIndex]?.title || 'Sem nível') : 'Sem nível',
-        score: latest.overall_score,
-        delta
-      };
-    }).filter(item => item !== null) as any[];
-
-    // Calcular dados por categorias (top 3 por mês)
+    
+    // Para categorias, vamos usar o diagnóstico mais recente de cada mês (para não sobrecarregar o gráfico)
     const categoriesData = recentMonths.map(month => {
       const monthDiagnostics = diagnosticsByMonth.get(month);
       if (!monthDiagnostics || monthDiagnostics.length === 0) {
         return null;
       }
       
-      const latest = monthDiagnostics[0];
+      // Pegar o mais recente do mês (último do array, já que sortedDiagnostics está ordenado)
+      const latest = monthDiagnostics[monthDiagnostics.length - 1];
       
       // Verificar se latest tem os dados necessários
       if (!latest || !latest.categorias || !Array.isArray(latest.categorias)) {
@@ -466,9 +492,17 @@ export class DashboardService {
         return null;
       }
       
-      const previousMonth = recentMonths[recentMonths.indexOf(month) - 1];
-      const previousDiagnostics = previousMonth ? diagnosticsByMonth.get(previousMonth) : null;
-      const previous = previousDiagnostics && previousDiagnostics.length > 0 ? previousDiagnostics[0] : null;
+      // Buscar o mês anterior que tenha dados
+      const currentMonthIndex = recentMonths.indexOf(month);
+      let previous: any = null;
+      for (let i = currentMonthIndex - 1; i >= 0; i--) {
+        const prevMonth = recentMonths[i];
+        const prevDiagnostics = diagnosticsByMonth.get(prevMonth);
+        if (prevDiagnostics && prevDiagnostics.length > 0) {
+          previous = prevDiagnostics[prevDiagnostics.length - 1];
+          break;
+        }
+      }
 
       const topCategories = (latest.categorias || [])
         .map((cat: any) => {
@@ -530,9 +564,12 @@ export class DashboardService {
       }
     });
 
+    // Extrair meses únicos dos dados gerais para o array de meses
+    const monthsForDisplay = Array.from(new Set(generalData.map(d => d.month))).sort();
+    
     return {
       levelLabels,
-      months: recentMonths,
+      months: monthsForDisplay, // Usar meses únicos dos dados gerais
       insightLines: [
         'Atualmente em sua trilha de crescimento',
         'Continue evoluindo para alcançar novos patamares'
