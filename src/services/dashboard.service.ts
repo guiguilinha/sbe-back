@@ -38,34 +38,20 @@ export class DashboardService {
         levelsCount: levels.length
       });
 
-      // 2. Buscar diagnósticos do usuário (último + histórico)
+      // 2. Buscar diagnósticos do usuário (último + histórico limitado para performance)
       console.log('[DashboardService] Buscando diagnósticos para userId:', {
         numericUserId,
         tokenProvided: !!token
       });
       const diagnosticsService = new DiagnosticsService();
       
-      // Primeiro, tentar buscar sem detalhes para verificar se há diagnósticos
-      const simpleDiagnostics = await diagnosticsService.getUserDiagnostics(numericUserId, token);
-      console.log('[DashboardService] Diagnósticos simples encontrados:', {
-        count: simpleDiagnostics.length,
-        userId: numericUserId,
-        diagnostics: simpleDiagnostics.map(d => ({
-          id: d.id,
-          user_id: d.user_id,
-          user_idType: typeof d.user_id,
-          overall_score: d.overall_score,
-          performed_at: d.performed_at
-        }))
-      });
-      
-      // Buscar TODOS os diagnósticos (sem paginação) para garantir que pegue o mais recente
-      // O total é 19, então vamos buscar todos
+      // Buscar apenas o necessário: último diagnóstico completo + histórico limitado (15 itens)
+      // Isso reduz drasticamente o número de queries e melhora a performance
       const diagnosticsResult = await diagnosticsService.getUserDiagnosticsWithDetails(
         numericUserId,
         token,
         1,
-        100 // Buscar até 100 para garantir que pegue todos os diagnósticos
+        15 // Buscar apenas 15 diagnósticos mais recentes (suficiente para dashboard)
       );
 
       const allDiagnostics = diagnosticsResult.data;
@@ -79,50 +65,11 @@ export class DashboardService {
       
       const lastDiagnostic = sortedDiagnostics[0] || null;
 
-      console.log('[DashboardService] Diagnósticos com detalhes encontrados:', {
+      console.log('[DashboardService] Diagnósticos encontrados:', {
         total: sortedDiagnostics.length,
         totalNoDirectus: diagnosticsResult.pagination.total,
-        hasLastDiagnostic: !!lastDiagnostic,
-        pagination: diagnosticsResult.pagination,
-        firstDiagnostic: lastDiagnostic ? {
-          id: lastDiagnostic.id,
-          user_id: lastDiagnostic.user_id,
-          performed_at: lastDiagnostic.performed_at,
-          overall_score: lastDiagnostic.overall_score,
-          dateFormatted: new Date(lastDiagnostic.performed_at).toLocaleDateString('pt-BR')
-        } : null,
-        allDiagnosticsDates: sortedDiagnostics.map(d => ({
-          id: d.id,
-          performed_at: d.performed_at,
-          performed_atFormatted: new Date(d.performed_at).toLocaleDateString('pt-BR'),
-          overall_score: d.overall_score,
-          user_id: d.user_id
-        }))
+        hasLastDiagnostic: !!lastDiagnostic
       });
-      
-      // Verificar se há diagnóstico de hoje
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayDiagnostics = sortedDiagnostics.filter(d => {
-        const diagDate = new Date(d.performed_at);
-        diagDate.setHours(0, 0, 0, 0);
-        return diagDate.getTime() === today.getTime();
-      });
-      
-      if (todayDiagnostics.length > 0) {
-        console.log('[DashboardService] ✅ DIAGNÓSTICOS DE HOJE ENCONTRADOS:', todayDiagnostics.map(d => ({
-          id: d.id,
-          performed_at: d.performed_at,
-          overall_score: d.overall_score
-        })));
-      } else {
-        console.warn('[DashboardService] ⚠️ NENHUM DIAGNÓSTICO DE HOJE encontrado. Data de hoje:', today.toISOString().split('T')[0]);
-        console.warn('[DashboardService] ⚠️ Diagnóstico mais recente:', lastDiagnostic ? {
-          id: lastDiagnostic.id,
-          performed_at: lastDiagnostic.performed_at,
-          dateFormatted: new Date(lastDiagnostic.performed_at).toLocaleDateString('pt-BR')
-        } : 'N/A');
-      }
 
       // 3. Se não tem diagnóstico, retornar estrutura vazia
       if (!lastDiagnostic) {
