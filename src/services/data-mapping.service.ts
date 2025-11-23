@@ -114,13 +114,21 @@ export class DataMappingService {
     empresasData: EmpresaVinculo[]
   ): EnrichedUserData {
     console.log('🔄 [DataMapping] Combinando dados do usuário e empresas...');
+    
+    // Garantir que empresasData seja sempre um array
+    const empresasArray = Array.isArray(empresasData) ? empresasData : [];
+    console.log('🔄 [DataMapping] Empresas recebidas:', JSON.stringify({
+      isArray: Array.isArray(empresasData),
+      length: empresasArray.length,
+      type: typeof empresasData
+    }, null, 2));
 
     const enrichedData: EnrichedUserData = {
       user: userData,
-      empresas: empresasData,
+      empresas: empresasArray,
       metadata: {
-        hasEmpresaData: empresasData.length > 0,
-        empresaSource: empresasData.length > 0 ? 'cpe-backend' : null,
+        hasEmpresaData: empresasArray.length > 0,
+        empresaSource: empresasArray.length > 0 ? 'cpe-backend' : null,
         lastUpdated: new Date().toISOString(),
         processingTime: Date.now()
       }
@@ -132,7 +140,7 @@ export class DataMappingService {
       empresaSource: enrichedData.metadata.empresaSource
     });
 
-    if (enrichedData.empresas.length > 0) {
+    if (enrichedData.empresas && enrichedData.empresas.length > 0) {
       console.log('🏢 [DataMapping] Dados das empresas incluídos:', {
         totalEmpresas: enrichedData.empresas.length,
         empresas: enrichedData.empresas.map(emp => ({
@@ -209,14 +217,16 @@ export class DataMappingService {
         cidade: enrichedData.user.cidade,
         uf: enrichedData.user.uf
       },
-      empresas: enrichedData.empresas.map(emp => ({
-        id: emp.id,
-        cnpj: emp.cnpj,
-        nome: emp.nome,
-        isPrincipal: emp.isPrincipal,
-        codStatusEmpresa: emp.codStatusEmpresa,
-        desTipoVinculo: emp.desTipoVinculo
-      })),
+      empresas: (enrichedData.empresas && Array.isArray(enrichedData.empresas)) 
+        ? enrichedData.empresas.map(emp => ({
+            id: emp.id,
+            cnpj: emp.cnpj,
+            nome: emp.nome,
+            isPrincipal: emp.isPrincipal,
+            codStatusEmpresa: emp.codStatusEmpresa,
+            desTipoVinculo: emp.desTipoVinculo
+          }))
+        : [],
       metadata: enrichedData.metadata
     };
   }

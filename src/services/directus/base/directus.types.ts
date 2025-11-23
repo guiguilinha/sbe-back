@@ -75,6 +75,7 @@ export interface DirectusRequestOptions extends AxiosRequestConfig {
   skipCache?: boolean;
   retryOnFailure?: boolean;
   timeout?: number;
+  sort?: string[];
 }
 
 // Interface para resultado de validação

@@ -191,12 +191,6 @@ export class CpeBackendService {
        */
       async getRawEmpresaData(cpf: string, serviceToken: string): Promise<any> {
         try {
-          console.log('🔍 [CpeBackend] Buscando dados brutos da empresa para CPF:', cpf);
-          console.log('🔍 [CpeBackend] === DADOS USADOS PARA CHAMAR API CPE ===');
-          console.log('🔍 [CpeBackend] baseUrl:', this.baseUrl);
-          console.log('🔍 [CpeBackend] cpf:', cpf);
-          console.log('🔍 [CpeBackend] serviceToken (primeiros 20 chars):', serviceToken.substring(0, 20) + '...');
-
           if (!this.baseUrl) {
             throw new Error('URL da API CPE não configurada');
           }
@@ -206,14 +200,6 @@ export class CpeBackendService {
           }
 
           const url = `${this.baseUrl}/vinculo-empresa?cpf=${cpf}`;
-          console.log('🔍 [CpeBackend] URL completa da API CPE:', url);
-          
-          console.log('🔍 [CpeBackend] Fazendo requisição para:', url);
-          console.log('🔍 [CpeBackend] Headers enviados:', {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${serviceToken.substring(0, 20)}...`
-          });
 
       const response = await axios.get(url, {
         timeout: this.timeout,
@@ -223,24 +209,6 @@ export class CpeBackendService {
           'Authorization': `Bearer ${serviceToken}`
         }
       });
-
-      console.log('🔍 [CpeBackend] === RESPOSTA COMPLETA DA API CPE ===');
-      console.log('🔍 [CpeBackend] Status:', response.status);
-      console.log('🔍 [CpeBackend] Status Text:', response.statusText);
-      console.log('🔍 [CpeBackend] Headers:', JSON.stringify(response.headers, null, 2));
-      console.log('🔍 [CpeBackend] Data (tipo):', typeof response.data);
-      console.log('🔍 [CpeBackend] Data (completa):', JSON.stringify(response.data, null, 2));
-      
-      // Log específico para debug
-      console.log('🔍 [CpeBackend] === DADOS BRUTOS DA EMPRESA PARA DEBUG ===');
-      if (Array.isArray(response.data)) {
-        console.log('🔍 [CpeBackend] É um array com', response.data.length, 'itens');
-        response.data.forEach((item, index) => {
-          console.log(`🔍 [CpeBackend] Item ${index + 1}:`, JSON.stringify(item, null, 2));
-        });
-      } else {
-        console.log('🔍 [CpeBackend] Não é um array:', response.data);
-      }
       
       return response.data;
 

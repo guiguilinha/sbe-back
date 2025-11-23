@@ -12,8 +12,8 @@ export abstract class DirectusBaseService<T = any> {
 
   private resolveToken(customToken?: string): string | undefined {
     return customToken || process.env.DIRECTUS_TOKEN;
-  }  
-  
+  }
+
   private readonly defaultTimeout = 30000;
 
   protected async makeRequest<R = T>(
@@ -115,24 +115,29 @@ export abstract class DirectusBaseService<T = any> {
     limit?: number;
     offset?: number;
     fields?: string[];
+    sort?: string | string[];
   } & { token?: string } = {}): Promise<T[]> {
-    const { filter, limit, offset, fields, ...rest } = options;
+    const { filter, limit, offset, fields, sort, ...rest } = options;
 
     const params = {
       ...(rest.params || {}),
       ...(filter ? { filter } : {}),
       ...(limit ? { limit } : {}),
       ...(offset !== undefined ? { offset } : {}),
-      ...(fields ? { fields } : {})
+      ...(fields ? { fields } : {}),
+      ...(sort ? { sort } : {})
     };
 
     // Log detalhado para collection diagnostics
     if (this.serviceName === 'diagnostics' && filter) {
-      console.log('[DirectusBaseService] 🔍 FETCH DIAGNÓSTICOS:');
-      console.log('[DirectusBaseService] - Collection:', this.serviceName);
-      console.log('[DirectusBaseService] - Endpoint completo:', `${this.baseUrl}/items/${this.serviceName}`);
-      console.log('[DirectusBaseService] - Filtro:', JSON.stringify(filter, null, 2));
-      console.log('[DirectusBaseService] - Parâmetros completos:', JSON.stringify(params, null, 2));
+      console.log('[DirectusBaseService] 🔍 FETCH DIAGNÓSTICOS:', {
+        collection: this.serviceName,
+        filter: JSON.stringify(filter),
+        limit,
+        offset,
+        fields: fields ? 'custom' : 'all',
+        sort
+      });
     }
 
     const res = await this.makeRequest<T[]>(`items/${this.serviceName}`, {
@@ -191,34 +196,34 @@ export abstract class DirectusBaseService<T = any> {
     } = {}
   ): Promise<{ section: S } & Record<string, E[]>> {
     const { token, filter, fields } = options;
-  
+
     const params = {
       ...(filter ? { filter } : {}),
       ...(fields ? { fields: fields.join(',') } : { fields: '*' }),
     };
-  
+
     const sectionPromise = this.makeRequest<S>(`items/${this.serviceName}`, {
       params,
       token,
     });
-  
+
     const extrasPromises = Object.entries(extrasConfig).map(async ([key, config]) => {
       const extraParams = {
         fields: '*',
         ...(config.sort ? { sort: config.sort } : {}),
       };
-  
+
       const result = await this.makeRequest<E[]>(config.endpoint, {
         params: extraParams,
         token,
       });
-  
+
       return [key, result.data] as const;
     });
-  
+
     const [sectionResult, ...extras] = await Promise.all([sectionPromise, ...extrasPromises]);
     const extrasMap = Object.fromEntries(extras) as Record<string, E[]>;
-  
+
     return {
       section: sectionResult.data,
       ...extrasMap,

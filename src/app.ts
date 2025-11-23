@@ -14,6 +14,7 @@ import dashboardRoutes from './routes/dashboard.routes';
 import diagnosticosRoutes from './routes/diagnosticos.routes';
 import enrichedUserRoutes from './routes/enriched-user.routes';
 import diagnosticRoutes from './routes/diagnostic.routes';
+import companyRoutes from './routes/company.routes';
 
 const app: Application = express();
 const PORT = process.env.PORT || 8080;
@@ -104,6 +105,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/diagnosticos', diagnosticosRoutes);
 app.use('/api/auth', enrichedUserRoutes);
 app.use('/api/diagnostics', diagnosticRoutes);
+app.use('/api/company', companyRoutes);
 
 // Rota raiz
 app.get('/', (req: Request, res: Response) => {
@@ -117,7 +119,8 @@ app.get('/', (req: Request, res: Response) => {
       dashboard: '/api/dashboard',
       diagnosticos: '/api/diagnosticos',
       auth: '/api/auth',
-      diagnostics: '/api/diagnostics'
+      diagnostics: '/api/diagnostics',
+      company: '/api/company'
     }
   });
 });

@@ -23,13 +23,8 @@ console.log('CPE_BACKEND_TIMEOUT:', process.env.CPE_BACKEND_TIMEOUT);
 
 const server = createServer(app);
 
-// Inicializar WebSocket Manager
-const wsManager = new WebSocketManager(server);
-
-// Expor a instância do WebSocketManager globalmente
-(global as any).wsManager = wsManager;
-
-// WebSocket Manager já está configurado no app.ts
+// Inicializar WebSocket Manager (Singleton)
+WebSocketManager.init(server);
 
 const PORT = process.env.BACKEND_PORT || process.env.PORT || 8080;
 
@@ -38,4 +33,4 @@ server.listen(PORT, () => {
   console.log(`🔌 WebSocket disponível em ws://localhost:${PORT}/ws`);
 });
 
-export default app; 
+export default app;

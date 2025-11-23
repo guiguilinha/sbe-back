@@ -12,13 +12,28 @@ export interface WebSocketMessage {
 }
 
 export class WebSocketManager {
+  private static instance: WebSocketManager;
   private wss: WebSocketServer;
   private directusService: DirectusWebSocketService;
   private realtimeService: DirectusRealtimeService;
   private clients = new Map<WebSocket, Set<string>>(); // client -> subscribed collections
 
-  constructor(server: any) {
-    this.wss = new WebSocketServer({ 
+  public static init(server: any): WebSocketManager {
+    if (!WebSocketManager.instance) {
+      WebSocketManager.instance = new WebSocketManager(server);
+    }
+    return WebSocketManager.instance;
+  }
+
+  public static getInstance(): WebSocketManager {
+    if (!WebSocketManager.instance) {
+      throw new Error('WebSocketManager not initialized');
+    }
+    return WebSocketManager.instance;
+  }
+
+  private constructor(server: any) {
+    this.wss = new WebSocketServer({
       server,
       path: '/ws'
     });
@@ -31,10 +46,10 @@ export class WebSocketManager {
   private setupWebSocket() {
     this.wss.on('connection', (ws: WebSocket) => {
       console.log('🔌 Cliente WebSocket conectado');
-      
+
       // Inicializar cliente
       this.clients.set(ws, new Set());
-      
+
       ws.on('message', (message: Buffer) => {
         try {
           const data: WebSocketMessage = JSON.parse(message.toString());
@@ -89,7 +104,7 @@ export class WebSocketManager {
   private async subscribeToCollection(ws: WebSocket, collection: string) {
     try {
       console.log(`📡 Inscrevendo cliente na collection: ${collection}`);
-      
+
       // Adicionar collection ao cliente
       const clientCollections = this.clients.get(ws);
       if (clientCollections) {
@@ -121,7 +136,7 @@ export class WebSocketManager {
   private async unsubscribeFromCollection(ws: WebSocket, collection: string) {
     try {
       console.log(`📡 Desinscrevendo cliente da collection: ${collection}`);
-      
+
       // Remover collection do cliente
       const clientCollections = this.clients.get(ws);
       if (clientCollections) {
@@ -155,7 +170,7 @@ export class WebSocketManager {
 
   private broadcastToCollection(collection: string, message: WebSocketMessage) {
     console.log(`📡 Broadcast para collection ${collection}:`, message);
-    
+
     for (const [client, collections] of this.clients) {
       if (collections.has(collection) && client.readyState === WebSocket.OPEN) {
         this.sendMessage(client, message);
