@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { DashboardService } from '../services/dashboard.service';
-import { getKeycloakValidationService } from '../services/keycloak-validation.service';
-import { UsersService } from '../services/directus/persistence/users.service';
+import { extractUserIdFromToken } from '../utils/user-extraction';
 import { UnauthorizedError, NotFoundError } from '../utils/AppError';
 
 export class DashboardController {
@@ -12,7 +11,7 @@ export class DashboardController {
    */
   static async getDashboard(req: Request, res: Response) {
     try {
-      const userId = await DashboardController.extractUserIdFromToken(req);
+      const userId = await extractUserIdFromToken(req);
       const directusToken = process.env.DIRECTUS_TOKEN;
       const data = await DashboardService.getDashboardData(userId, directusToken);
 
@@ -23,44 +22,12 @@ export class DashboardController {
   }
 
   /**
-   * Helper para extrair userId do token
-   */
-  private static async extractUserIdFromToken(req: Request): Promise<number> {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedError('Token de autorização não fornecido ou formato inválido');
-    }
-
-    const idToken = authHeader.replace('Bearer ', '');
-    const keycloakValidationService = getKeycloakValidationService();
-
-    let keycloakUserData;
-    try {
-      keycloakUserData = await keycloakValidationService.validateIdToken(idToken);
-    } catch (err) {
-      throw new UnauthorizedError('Token inválido ou expirado');
-    }
-
-    const cpf = keycloakValidationService.extractCpfFromToken(keycloakUserData);
-
-    const usersService = new UsersService();
-    const directusToken = process.env.DIRECTUS_TOKEN;
-    const user = await usersService.getUserByCpf(cpf, directusToken);
-
-    if (!user) {
-      throw new NotFoundError('Usuário não encontrado. Por favor, realize um diagnóstico primeiro.');
-    }
-
-    return user.id;
-  }
-
-  /**
    * GET /api/dashboard/evolution/general
    * Retorna dados de evolução geral
    */
   static async getEvolutionGeneral(req: Request, res: Response) {
     try {
-      const userId = await DashboardController.extractUserIdFromToken(req);
+      const userId = await extractUserIdFromToken(req);
       const directusToken = process.env.DIRECTUS_TOKEN;
       const data = await DashboardService.getEvolutionGeneralData(userId, directusToken);
 
@@ -76,7 +43,7 @@ export class DashboardController {
    */
   static async getEvolutionCategories(req: Request, res: Response) {
     try {
-      const userId = await DashboardController.extractUserIdFromToken(req);
+      const userId = await extractUserIdFromToken(req);
       const directusToken = process.env.DIRECTUS_TOKEN;
       const data = await DashboardService.getEvolutionCategoriesData(userId, directusToken);
 
@@ -92,7 +59,7 @@ export class DashboardController {
    */
   static async getPerformanceGeneral(req: Request, res: Response) {
     try {
-      const userId = await DashboardController.extractUserIdFromToken(req);
+      const userId = await extractUserIdFromToken(req);
       const directusToken = process.env.DIRECTUS_TOKEN;
       const data = await DashboardService.getPerformanceGeneralData(userId, directusToken);
 
@@ -109,7 +76,7 @@ export class DashboardController {
   static async getPerformanceCategory(req: Request, res: Response) {
     try {
       const { categoryId } = req.params;
-      const userId = await DashboardController.extractUserIdFromToken(req);
+      const userId = await extractUserIdFromToken(req);
       const directusToken = process.env.DIRECTUS_TOKEN;
       const data = await DashboardService.getPerformanceCategoryData(categoryId, userId, directusToken);
 
@@ -125,7 +92,7 @@ export class DashboardController {
    */
   static async getLevelLabels(req: Request, res: Response) {
     try {
-      const userId = await DashboardController.extractUserIdFromToken(req);
+      const userId = await extractUserIdFromToken(req);
       const directusToken = process.env.DIRECTUS_TOKEN;
       const data = await DashboardService.getDashboardData(userId, directusToken);
       const levelLabels = data.evolution?.levelLabels || [];

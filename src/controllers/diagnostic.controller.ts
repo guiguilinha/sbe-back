@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { DiagnosticPersistenceService } from '../services/directus/persistence/diagnostic-persistence.service';
 import { DiagnosticsService } from '../services/directus/persistence/diagnostics.service';
 import { CompleteDiagnosticRequest } from '../contracts/persistence/persistence.types';
+import { extractUserIdFromToken } from '../utils/user-extraction';
 
 export class DiagnosticController {
   private persistenceService = new DiagnosticPersistenceService();
@@ -22,7 +23,7 @@ export class DiagnosticController {
       // A validação do token Keycloak pode ser adicionada no futuro se necessário para autorização.
 
       const result = await this.persistenceService.saveCompleteDiagnostic(
-        requestData, 
+        requestData,
         directusToken,
         keycloakToken // Passar token do Keycloak para Meta Sebrae
       );
@@ -30,29 +31,27 @@ export class DiagnosticController {
       res.status(201).json(result);
     } catch (error) {
       console.error('[DiagnosticController] Erro ao salvar diagnóstico:', error);
-      res.status(500).json({ 
-        success: false, 
+      res.status(500).json({
+        success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'
       });
     }
   }
 
   /**
-   * GET /api/diagnostics/user/:userId
-   * Lista diagnósticos de um usuário com dados completos
-   * Query params: page (número da página, padrão: 1), limit (itens por página, padrão: 10)
+   * GET /api/diagnostics/user
+   * Lista diagnósticos do usuário autenticado com dados completos
+   * Extrai userId automaticamente do token Keycloak (não requer parâmetro na URL)
+   * Query params: page (número da página, padrão: 1), limit (itens por página, padrão: 100 para histórico)
    */
   async getUserDiagnostics(req: Request, res: Response) {
     try {
-      const userId = parseInt(req.params.userId);
+      // Extrair userId do token Keycloak (igual ao dashboard)
+      const userId = await extractUserIdFromToken(req);
+      
       const page = parseInt(req.query.page as string) || 1;
-      const limit = parseInt(req.query.limit as string) || 10;
-      const keycloakToken = req.headers.authorization?.replace('Bearer ', '');
+      const limit = parseInt(req.query.limit as string) || 100; // Aumentar limite padrão para histórico completo
       const directusToken = process.env.DIRECTUS_TOKEN;
-
-      // Nota: O token do Keycloak é usado para autenticação do usuário no frontend.
-      // O token do Directus é usado para acesso ao banco de dados.
-      // A validação do token Keycloak pode ser adicionada no futuro se necessário para autorização.
 
       // Validar parâmetros de paginação
       if (page < 1) {
@@ -69,21 +68,37 @@ export class DiagnosticController {
       }
 
       const result = await this.diagnosticsService.getUserDiagnosticsWithDetails(
-        userId, 
+        userId,
         directusToken,
         page,
         limit
       );
 
-      res.json({
+      return res.json({
         success: true,
         data: result.data,
         pagination: result.pagination
       });
     } catch (error) {
       console.error('[DiagnosticController] Erro ao buscar diagnósticos:', error);
-      res.status(500).json({ 
-        success: false, 
+      
+      // Tratar erros de autenticação/autorização
+      if (error instanceof Error && (error.message.includes('Token') || error.message.includes('autorização'))) {
+        return res.status(401).json({
+          success: false,
+          error: error.message
+        });
+      }
+      
+      if (error instanceof Error && error.message.includes('não encontrado')) {
+        return res.status(404).json({
+          success: false,
+          error: error.message
+        });
+      }
+      
+      return res.status(500).json({
+        success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'
       });
     }
@@ -105,7 +120,7 @@ export class DiagnosticController {
 
       // 1. Buscar diagnóstico básico para obter userId
       const diagnosticBasic = await this.diagnosticsService.getDiagnosticById(diagnosticId, directusToken);
-      
+
       if (!diagnosticBasic) {
         return res.status(404).json({
           success: false,
@@ -132,14 +147,14 @@ export class DiagnosticController {
         });
       }
 
-      res.json({
+      return res.json({
         success: true,
         data: diagnostic
       });
     } catch (error) {
       console.error('[DiagnosticController] Erro ao buscar diagnóstico:', error);
-      res.status(500).json({ 
-        success: false, 
+      return res.status(500).json({
+        success: false,
         error: error instanceof Error ? error.message : 'Erro desconhecido'
       });
     }
