@@ -126,12 +126,35 @@ export abstract class DirectusBaseService<T = any> {
       ...(fields ? { fields } : {})
     };
 
+    // Log detalhado para collection diagnostics
+    if (this.serviceName === 'diagnostics' && filter) {
+      console.log('[DirectusBaseService] 🔍 FETCH DIAGNÓSTICOS:');
+      console.log('[DirectusBaseService] - Collection:', this.serviceName);
+      console.log('[DirectusBaseService] - Endpoint completo:', `${this.baseUrl}/items/${this.serviceName}`);
+      console.log('[DirectusBaseService] - Filtro:', JSON.stringify(filter, null, 2));
+      console.log('[DirectusBaseService] - Parâmetros completos:', JSON.stringify(params, null, 2));
+    }
+
     const res = await this.makeRequest<T[]>(`items/${this.serviceName}`, {
       ...rest,
       method: 'GET',
       params,
       token: options.token
     });
+
+    // Log da resposta para diagnostics
+    if (this.serviceName === 'diagnostics' && filter) {
+      console.log('[DirectusBaseService] ✅ RESPOSTA FETCH DIAGNÓSTICOS:');
+      console.log('[DirectusBaseService] - Total retornado:', Array.isArray(res.data) ? res.data.length : 0);
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        console.log('[DirectusBaseService] - Primeiros diagnósticos:', res.data.slice(0, 5).map((d: any) => ({
+          id: d.id,
+          user_id: d.user_id,
+          performed_at: d.performed_at,
+          overall_score: d.overall_score
+        })));
+      }
+    }
 
     return res.data;
   }

@@ -27,12 +27,29 @@ export class DiagnosticsService extends DirectusBaseService<Diagnostic> {
    * Busca diagnósticos de um usuário
    */
   async getUserDiagnostics(userId: number, token?: string): Promise<Diagnostic[]> {
-    console.log('[DiagnosticsService] Buscando diagnósticos do usuário:', userId);
-    return this.fetch({
+    console.log('[DiagnosticsService] Buscando diagnósticos do usuário:', {
+      userId,
+      userIdType: typeof userId,
+      tokenProvided: !!token
+    });
+    
+    const result = await this.fetch({
       filter: { user_id: { _eq: userId } },
       sort: ['-performed_at'],
       token
     });
+    
+    console.log('[DiagnosticsService] Resultado da busca:', {
+      count: result.length,
+      diagnostics: result.map(d => ({
+        id: d.id,
+        user_id: d.user_id,
+        user_idType: typeof d.user_id,
+        overall_score: d.overall_score
+      }))
+    });
+    
+    return result;
   }
 
   /**
@@ -50,25 +67,140 @@ export class DiagnosticsService extends DirectusBaseService<Diagnostic> {
     limit: number = 10
   ): Promise<{ data: any[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
     try {
+      console.log('[DiagnosticsService] getUserDiagnosticsWithDetails - Parâmetros:', {
+        userId,
+        userIdType: typeof userId,
+        page,
+        limit,
+        tokenProvided: !!token
+      });
+      
       // Calcular offset
       const offset = (page - 1) * limit;
       
+      // Garantir que userId seja número
+      const numericUserId = typeof userId === 'string' ? parseInt(userId, 10) : userId;
+      if (isNaN(numericUserId)) {
+        throw new Error(`userId inválido: ${userId} (tipo: ${typeof userId})`);
+      }
+      
+      const filterObj = { user_id: { _eq: numericUserId } };
+      console.log('[DiagnosticsService] ⚠️ BUSCA DE DIAGNÓSTICOS:');
+      console.log('[DiagnosticsService] - Collection: "diagnostics" (serviceName)');
+      console.log('[DiagnosticsService] - Endpoint: items/diagnostics');
+      console.log('[DiagnosticsService] - Filtro aplicado:', JSON.stringify(filterObj, null, 2));
+      console.log('[DiagnosticsService] - userId usado:', numericUserId, '(tipo:', typeof numericUserId, ')');
+      console.log('[DiagnosticsService] - Ordenação: -performed_at (mais recente primeiro)');
+      console.log('[DiagnosticsService] - Paginação: page', page, ', limit', limit, ', offset', offset);
+      
       // Buscar diagnósticos básicos com paginação
       const diagnostics = await this.fetch({
-        filter: { user_id: { _eq: userId } },
+        filter: filterObj,
         sort: ['-performed_at'],
         limit,
         offset,
         token
       });
       
+      // Debug: Verificar se há diagnósticos de hoje que não foram retornados
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(today);
+      todayEnd.setHours(23, 59, 59, 999);
+      
+      console.log('[DiagnosticsService] Verificando diagnósticos de hoje:', {
+        today: today.toISOString(),
+        todayEnd: todayEnd.toISOString(),
+        userId: numericUserId
+      });
+      
+      // Buscar todos os diagnósticos de hoje (sem paginação) para debug
+      const todayDiagnostics = await this.fetch({
+        filter: { 
+          user_id: { _eq: numericUserId },
+          performed_at: {
+            _gte: today.toISOString(),
+            _lte: todayEnd.toISOString()
+          }
+        },
+        sort: ['-performed_at'],
+        token
+      });
+      
+      if (todayDiagnostics.length > 0) {
+        console.log('[DiagnosticsService] ✅ DIAGNÓSTICOS DE HOJE ENCONTRADOS:', todayDiagnostics.map((d: any) => ({
+          id: d.id,
+          user_id: d.user_id,
+          performed_at: d.performed_at,
+          overall_score: d.overall_score
+        })));
+      } else {
+        console.warn('[DiagnosticsService] ⚠️ NENHUM DIAGNÓSTICO DE HOJE encontrado para user_id =', numericUserId);
+      }
+      
+      // Debug: Se não encontrou nada, tentar buscar todos para ver o que existe
+      if (diagnostics.length === 0) {
+        console.warn('[DiagnosticsService] ⚠️ NENHUM DIAGNÓSTICO ENCONTRADO com filtro user_id =', numericUserId);
+        console.warn('[DiagnosticsService] Buscando TODOS os diagnósticos (sem filtro) para debug...');
+        const allDiagnostics = await this.fetch({
+          limit: 30,
+          sort: ['-performed_at'],
+          token
+        });
+        console.log('[DiagnosticsService] ⚠️ DEBUG: Primeiros 30 diagnósticos encontrados (SEM FILTRO):', {
+          count: allDiagnostics.length,
+          diagnostics: allDiagnostics.map((d: any) => ({
+            id: d.id,
+            user_id: d.user_id,
+            user_idType: typeof d.user_id,
+            overall_score: d.overall_score,
+            performed_at: d.performed_at,
+            performed_atFormatted: new Date(d.performed_at).toLocaleDateString('pt-BR'),
+            given_name: d.given_name || 'N/A'
+          }))
+        });
+        console.log('[DiagnosticsService] ⚠️ DIAGNÓSTICOS COM user_id =', numericUserId, ':', 
+          allDiagnostics.filter((d: any) => d.user_id === numericUserId).map((d: any) => ({
+            id: d.id,
+            performed_at: d.performed_at,
+            performed_atFormatted: new Date(d.performed_at).toLocaleDateString('pt-BR'),
+            overall_score: d.overall_score
+          }))
+        );
+      } else {
+        console.log('[DiagnosticsService] ✅ DIAGNÓSTICOS ENCONTRADOS:', {
+          count: diagnostics.length,
+          userId: numericUserId,
+          diagnostics: diagnostics.map((d: any) => ({
+            id: d.id,
+            user_id: d.user_id,
+            performed_at: d.performed_at,
+            performed_atFormatted: new Date(d.performed_at).toLocaleDateString('pt-BR'),
+            overall_score: d.overall_score
+          }))
+        });
+      }
+      
+      console.log('[DiagnosticsService] Diagnósticos básicos encontrados:', {
+        count: diagnostics.length,
+        diagnostics: diagnostics.map(d => ({
+          id: d.id,
+          user_id: d.user_id,
+          user_idType: typeof d.user_id,
+          overall_score: d.overall_score,
+          performed_at: d.performed_at
+        }))
+      });
+      
       // Buscar total de diagnósticos para metadados
       const totalDiagnostics = await this.fetch({
-        filter: { user_id: { _eq: userId } },
+        filter: { user_id: { _eq: numericUserId } },
         limit: -1, // -1 retorna todos para contar
         token
       });
       const total = totalDiagnostics.length;
+      
+      console.log('[DiagnosticsService] Total de diagnósticos:', total);
 
     // Agora buscar dados relacionados para cada diagnóstico em paralelo
     const diagnosticsWithDetails = await Promise.all(

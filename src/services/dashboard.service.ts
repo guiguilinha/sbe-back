@@ -1,19 +1,147 @@
-import { DashboardResponse } from '../contracts/dashboard/dashboard.types';
+import { DashboardResponse, OverallLevel, OverallLevelCode, CategorySnapshot, StatusKind } from '../contracts/dashboard/dashboard.types';
+import { DiagnosticsService } from './directus/persistence/diagnostics.service';
+import { CategoriesService } from './directus/general/categories.service';
+import { LevelsService } from './directus/general/levels.service';
+import { UsersService } from './directus/persistence/users.service';
 
 export class DashboardService {
   /**
-   * Retorna dados completos do dashboard
+   * Retorna dados completos do dashboard baseados em dados reais do Directus
+   * @param userId - ID do usuário no Directus
+   * @param token - Token do Directus
    */
-  static async getDashboardData(): Promise<DashboardResponse> {
+  static async getDashboardData(userId: number, token?: string): Promise<DashboardResponse> {
     try {
-      console.log('[DashboardService] getDashboardData - Carregando dados completos do dashboard');
+      // Garantir que userId seja número
+      const numericUserId = typeof userId === 'string' ? parseInt(userId, 10) : userId;
+      if (isNaN(numericUserId)) {
+        throw new Error(`userId inválido: ${userId} (tipo: ${typeof userId})`);
+      }
       
-      // Nota: Este serviço atualmente retorna dados mock.
-      // A integração com Directus será implementada quando necessário para agregação de dados reais.
-      const mockData = await this.loadMockData();
+      console.log('[DashboardService] getDashboardData - Carregando dados completos do dashboard para usuário:', {
+        originalUserId: userId,
+        originalType: typeof userId,
+        numericUserId,
+        numericType: typeof numericUserId
+      });
       
+      // 1. Buscar dados básicos em paralelo
+      const [user, categories, levels] = await Promise.all([
+        new UsersService().getUserById(numericUserId, token),
+        new CategoriesService().getCategories(),
+        new LevelsService().getLevels()
+      ]);
+
+      console.log('[DashboardService] Dados básicos carregados:', {
+        hasUser: !!user,
+        categoriesCount: categories.length,
+        levelsCount: levels.length
+      });
+
+      // 2. Buscar diagnósticos do usuário (último + histórico)
+      console.log('[DashboardService] Buscando diagnósticos para userId:', {
+        numericUserId,
+        tokenProvided: !!token
+      });
+      const diagnosticsService = new DiagnosticsService();
+      
+      // Primeiro, tentar buscar sem detalhes para verificar se há diagnósticos
+      const simpleDiagnostics = await diagnosticsService.getUserDiagnostics(numericUserId, token);
+      console.log('[DashboardService] Diagnósticos simples encontrados:', {
+        count: simpleDiagnostics.length,
+        userId: numericUserId,
+        diagnostics: simpleDiagnostics.map(d => ({
+          id: d.id,
+          user_id: d.user_id,
+          user_idType: typeof d.user_id,
+          overall_score: d.overall_score,
+          performed_at: d.performed_at
+        }))
+      });
+      
+      // Buscar TODOS os diagnósticos (sem paginação) para garantir que pegue o mais recente
+      // O total é 19, então vamos buscar todos
+      const diagnosticsResult = await diagnosticsService.getUserDiagnosticsWithDetails(
+        numericUserId,
+        token,
+        1,
+        100 // Buscar até 100 para garantir que pegue todos os diagnósticos
+      );
+
+      const allDiagnostics = diagnosticsResult.data;
+      
+      // Garantir que está ordenado do mais recente para o mais antigo
+      const sortedDiagnostics = [...allDiagnostics].sort((a, b) => {
+        const dateA = new Date(a.performed_at).getTime();
+        const dateB = new Date(b.performed_at).getTime();
+        return dateB - dateA; // Ordem decrescente (mais recente primeiro)
+      });
+      
+      const lastDiagnostic = sortedDiagnostics[0] || null;
+
+      console.log('[DashboardService] Diagnósticos com detalhes encontrados:', {
+        total: sortedDiagnostics.length,
+        totalNoDirectus: diagnosticsResult.pagination.total,
+        hasLastDiagnostic: !!lastDiagnostic,
+        pagination: diagnosticsResult.pagination,
+        firstDiagnostic: lastDiagnostic ? {
+          id: lastDiagnostic.id,
+          user_id: lastDiagnostic.user_id,
+          performed_at: lastDiagnostic.performed_at,
+          overall_score: lastDiagnostic.overall_score,
+          dateFormatted: new Date(lastDiagnostic.performed_at).toLocaleDateString('pt-BR')
+        } : null,
+        allDiagnosticsDates: sortedDiagnostics.map(d => ({
+          id: d.id,
+          performed_at: d.performed_at,
+          performed_atFormatted: new Date(d.performed_at).toLocaleDateString('pt-BR'),
+          overall_score: d.overall_score,
+          user_id: d.user_id
+        }))
+      });
+      
+      // Verificar se há diagnóstico de hoje
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayDiagnostics = sortedDiagnostics.filter(d => {
+        const diagDate = new Date(d.performed_at);
+        diagDate.setHours(0, 0, 0, 0);
+        return diagDate.getTime() === today.getTime();
+      });
+      
+      if (todayDiagnostics.length > 0) {
+        console.log('[DashboardService] ✅ DIAGNÓSTICOS DE HOJE ENCONTRADOS:', todayDiagnostics.map(d => ({
+          id: d.id,
+          performed_at: d.performed_at,
+          overall_score: d.overall_score
+        })));
+      } else {
+        console.warn('[DashboardService] ⚠️ NENHUM DIAGNÓSTICO DE HOJE encontrado. Data de hoje:', today.toISOString().split('T')[0]);
+        console.warn('[DashboardService] ⚠️ Diagnóstico mais recente:', lastDiagnostic ? {
+          id: lastDiagnostic.id,
+          performed_at: lastDiagnostic.performed_at,
+          dateFormatted: new Date(lastDiagnostic.performed_at).toLocaleDateString('pt-BR')
+        } : 'N/A');
+      }
+
+      // 3. Se não tem diagnóstico, retornar estrutura vazia
+      if (!lastDiagnostic) {
+        console.log('[DashboardService] Nenhum diagnóstico encontrado, retornando estrutura vazia');
+        return this.buildEmptyDashboard(user, categories, levels);
+      }
+
+      // 4. Mapear último diagnóstico para dados do dashboard
+      const dashboardData = await this.mapDiagnosticToDashboard(
+        lastDiagnostic,
+        sortedDiagnostics,
+        user,
+        categories,
+        levels,
+        token
+      );
+
       console.log('[DashboardService] getDashboardData - Dados carregados com sucesso');
-      return mockData;
+      return dashboardData;
     } catch (error) {
       console.error('[DashboardService] getDashboardData - Erro:', error);
       throw error;
@@ -21,14 +149,394 @@ export class DashboardService {
   }
 
   /**
-   * Retorna dados de evolução geral
+   * Constrói dashboard vazio quando não há diagnósticos
    */
-  static async getEvolutionGeneralData() {
+  private static buildEmptyDashboard(
+    user: any,
+    categories: any[],
+    levels: any[]
+  ): DashboardResponse {
+    const defaultLevel = levels[0] || { id: 1, title: 'Iniciante digital' };
+    
+    return {
+      user: {
+        name: `${user.given_name || ''} ${user.last_name || ''}`.trim() || 'Usuário'
+      },
+      overallLevel: {
+        code: 'L1' as OverallLevelCode,
+        label: defaultLevel.title
+      },
+      overallPoints: 0,
+      deltaOverall: 0,
+      overall: [],
+      categories: categories.map(cat => ({
+        id: cat.id.toString(),
+        name: cat.title,
+        status: 'attention' as StatusKind,
+        statusLabel: 'Sem dados',
+        score: 0,
+        insight: 'Realize um diagnóstico para ver seus resultados',
+        actions: [],
+        resources: []
+      })),
+      historySample: [],
+      evolution: undefined
+    };
+  }
+
+  /**
+   * Mapeia diagnóstico do Directus para formato DashboardResponse
+   */
+  private static async mapDiagnosticToDashboard(
+    lastDiagnostic: any,
+    allDiagnostics: any[],
+    user: any,
+    categories: any[],
+    levels: any[],
+    token?: string
+  ): Promise<DashboardResponse> {
+    // 1. Mapear nível geral
+    const overallLevel = this.mapLevelToOverallLevel(lastDiagnostic.overall_level_id, levels);
+    
+    // 2. Calcular delta geral (comparar com diagnóstico anterior)
+    // allDiagnostics já está ordenado do mais recente para o mais antigo
+    const previousDiagnostic = allDiagnostics[1] || null;
+    const deltaOverall = previousDiagnostic 
+      ? lastDiagnostic.overall_score - previousDiagnostic.overall_score
+      : 0;
+    
+    console.log('[DashboardService] Cálculo de delta:', {
+      lastDiagnostic: {
+        id: lastDiagnostic.id,
+        performed_at: lastDiagnostic.performed_at,
+        overall_score: lastDiagnostic.overall_score
+      },
+      previousDiagnostic: previousDiagnostic ? {
+        id: previousDiagnostic.id,
+        performed_at: previousDiagnostic.performed_at,
+        overall_score: previousDiagnostic.overall_score
+      } : null,
+      deltaOverall
+    });
+
+    // 3. Mapear categorias
+    const categorySnapshots = await this.mapCategories(
+      lastDiagnostic.categorias || [],
+      categories,
+      levels,
+      previousDiagnostic?.categorias || []
+    );
+
+    // 4. Mapear histórico (limitado a 10 registros)
+    // allDiagnostics já vem ordenado do mais recente para o mais antigo do Directus
+    // Mas vamos garantir a ordenação correta
+    const sortedForHistory = [...allDiagnostics].sort((a, b) => {
+      const dateA = new Date(a.performed_at).getTime();
+      const dateB = new Date(b.performed_at).getTime();
+      return dateB - dateA; // Ordem decrescente (mais recente primeiro)
+    });
+    
+    // Limitar a 10 registros mais recentes para o histórico
+    const limitedHistory = sortedForHistory.slice(0, 10);
+    
+    console.log('[DashboardService] Diagnósticos ordenados para histórico:', {
+      total: sortedForHistory.length,
+      limited: limitedHistory.length,
+      first3: limitedHistory.slice(0, 3).map(d => ({
+        id: d.id,
+        performed_at: d.performed_at,
+        overall_score: d.overall_score,
+        user_id: d.user_id
+      })),
+      last3: limitedHistory.slice(-3).map(d => ({
+        id: d.id,
+        performed_at: d.performed_at,
+        overall_score: d.overall_score,
+        user_id: d.user_id
+      }))
+    });
+    
+    // Mapear apenas os 10 mais recentes para histórico
+    const historySample = this.mapHistorySample(limitedHistory, levels);
+
+    // 5. Calcular evolução
+    const evolution = this.calculateEvolution(allDiagnostics, categories, levels);
+
+    // 6. Construir stats gerais
+    const overall: any[] = [
+      {
+        label: 'Pontuação Total',
+        value: lastDiagnostic.overall_score,
+        suffix: 'pts',
+        delta: {
+          trend: deltaOverall > 0 ? 'up' : deltaOverall < 0 ? 'down' : 'flat',
+          value: Math.abs(deltaOverall),
+          suffix: 'pts'
+        }
+      }
+    ];
+
+    return {
+      user: {
+        name: `${user.given_name || ''} ${user.last_name || ''}`.trim() || 'Usuário'
+      },
+      overallLevel,
+      overallPoints: lastDiagnostic.overall_score,
+      deltaOverall,
+      overall,
+      categories: categorySnapshots,
+      historySample,
+      evolution
+    };
+  }
+
+  /**
+   * Mapeia level_id para OverallLevel
+   */
+  private static mapLevelToOverallLevel(levelId: number, levels: any[]): OverallLevel {
+    const level = levels.find(l => l.id === levelId);
+    if (!level) {
+      return { code: 'L1' as OverallLevelCode, label: 'Iniciante digital' };
+    }
+
+    // Mapear para código baseado na ordem (assumindo 4 níveis)
+    const levelIndex = levels.findIndex(l => l.id === levelId);
+    const codes: OverallLevelCode[] = ['L1', 'L2', 'L3', 'L4'];
+    const code = codes[levelIndex] || 'L1';
+
+    return {
+      code,
+      label: level.title
+    };
+  }
+
+  /**
+   * Mapeia categorias do diagnóstico para CategorySnapshot
+   */
+  private static async mapCategories(
+    diagnosticCategories: any[],
+    allCategories: any[],
+    allLevels: any[],
+    previousCategories: any[]
+  ): Promise<CategorySnapshot[]> {
+    return diagnosticCategories.map(diagCat => {
+      // Buscar dados da categoria
+      const category = allCategories.find(c => c.id === diagCat.category_id);
+      const level = allLevels.find(l => l.id === diagCat.level_id);
+
+      // Buscar categoria anterior para calcular delta
+      const previousCat = previousCategories.find(
+        pc => pc.category_id === diagCat.category_id
+      );
+
+      // Determinar status baseado no level_id
+      let status: StatusKind = 'ok';
+      if (diagCat.level_id <= 2) {
+        status = 'attention';
+      } else if (diagCat.level_id === 3) {
+        status = 'evolving';
+      }
+
+      return {
+        id: diagCat.category_id.toString(),
+        name: category?.title || `Categoria ${diagCat.category_id}`,
+        status,
+        statusLabel: level?.title || 'Sem nível',
+        score: diagCat.score,
+        insight: diagCat.insight || '',
+        actions: diagCat.tip ? [{ id: '1', text: diagCat.tip }] : [],
+        resources: []
+      };
+    });
+  }
+
+  /**
+   * Mapeia histórico de diagnósticos para historySample
+   */
+  private static mapHistorySample(diagnostics: any[], levels: any[]): Array<{
+    id: string;
+    date: string;
+    overallScore: number;
+    level?: OverallLevel;
+    delta?: number;
+  }> {
+    return diagnostics.map((diag, index) => {
+      const previous = diagnostics[index + 1];
+      const delta = previous ? diag.overall_score - previous.overall_score : 0;
+
+      return {
+        id: diag.id.toString(),
+        date: diag.performed_at,
+        overallScore: diag.overall_score,
+        level: this.mapLevelToOverallLevel(diag.overall_level_id, levels),
+        delta
+      };
+    });
+  }
+
+  /**
+   * Calcula dados de evolução baseados no histórico
+   */
+  private static calculateEvolution(
+    diagnostics: any[],
+    categories: any[],
+    levels: any[]
+  ): DashboardResponse['evolution'] {
+    if (diagnostics.length === 0) {
+      return undefined;
+    }
+
+    // Agrupar diagnósticos por mês
+    const diagnosticsByMonth = new Map<string, any[]>();
+    
+    diagnostics.forEach(diag => {
+      const date = new Date(diag.performed_at);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!diagnosticsByMonth.has(monthKey)) {
+        diagnosticsByMonth.set(monthKey, []);
+      }
+      diagnosticsByMonth.get(monthKey)!.push(diag);
+    });
+
+    // Ordenar meses
+    const sortedMonths = Array.from(diagnosticsByMonth.keys()).sort().reverse();
+
+    // Pegar últimos 12 meses
+    const recentMonths = sortedMonths.slice(0, 12).reverse();
+
+    // Mapear level labels
+    const levelLabels = levels.map(l => l.title);
+
+    // Calcular dados gerais
+    const generalData = recentMonths.map(month => {
+      const monthDiagnostics = diagnosticsByMonth.get(month);
+      if (!monthDiagnostics || monthDiagnostics.length === 0) {
+        return null;
+      }
+      
+      const latest = monthDiagnostics[0]; // Mais recente do mês
+      const previousMonth = recentMonths[recentMonths.indexOf(month) - 1];
+      const previousDiagnostics = previousMonth ? diagnosticsByMonth.get(previousMonth) : null;
+      const previous = previousDiagnostics && previousDiagnostics.length > 0 ? previousDiagnostics[0] : null;
+
+      const levelIndex = levels.findIndex(l => l.id === latest.overall_level_id);
+      const delta = previous ? latest.overall_score - previous.overall_score : 0;
+
+      return {
+        month,
+        level: levelIndex >= 0 ? levelIndex + 1 : 1, // 1-based index
+        levelLabel: levelIndex >= 0 ? (levels[levelIndex]?.title || 'Sem nível') : 'Sem nível',
+        score: latest.overall_score,
+        delta
+      };
+    }).filter(item => item !== null) as any[];
+
+    // Calcular dados por categorias (top 3 por mês)
+    const categoriesData = recentMonths.map(month => {
+      const monthDiagnostics = diagnosticsByMonth.get(month);
+      if (!monthDiagnostics || monthDiagnostics.length === 0) {
+        return null;
+      }
+      
+      const latest = monthDiagnostics[0];
+      const previousMonth = recentMonths[recentMonths.indexOf(month) - 1];
+      const previousDiagnostics = previousMonth ? diagnosticsByMonth.get(previousMonth) : null;
+      const previous = previousDiagnostics && previousDiagnostics.length > 0 ? previousDiagnostics[0] : null;
+
+      const topCategories = (latest.categorias || [])
+        .map((cat: any) => {
+          const category = categories.find(c => c.id === cat.category_id);
+          const level = levels.find(l => l.id === cat.level_id);
+          const previousCat = previous?.categorias?.find(
+            (pc: any) => pc.category_id === cat.category_id
+          );
+          const delta = previousCat ? cat.score - previousCat.score : 0;
+
+          // Cores por categoria (pode ser melhorado)
+          const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+          const colorIndex = (cat.category_id - 1) % colors.length;
+          const levelIndex = levels.findIndex(l => l.id === cat.level_id);
+
+          return {
+            id: cat.category_id.toString(),
+            name: category?.title || `Categoria ${cat.category_id}`,
+            level: levelIndex >= 0 ? levelIndex + 1 : 1,
+            levelLabel: level?.title || 'Sem nível',
+            score: cat.score,
+            delta,
+            color: colors[colorIndex]
+          };
+        })
+        .sort((a: any, b: any) => b.score - a.score)
+        .slice(0, 3);
+
+      return {
+        month,
+        topCategories
+      };
+    }).filter(item => item !== null) as any[];
+
+    // Calcular performance
+    const generalPerformance = generalData.length >= 2 
+      ? this.calculatePerformanceMetrics(generalData)
+      : {
+          percentage: 0,
+          trend: 'flat' as const,
+          period: 'último mês'
+        };
+    
+    const categoriesPerformance: Record<string, any> = {};
+    categories.forEach(cat => {
+      const categoryData = categoriesData
+        .filter(m => m && m.topCategories && m.topCategories.length > 0)
+        .flatMap(m => m.topCategories.filter((tc: any) => tc.id === cat.id.toString()))
+        .map((tc: any) => ({ score: tc.score, delta: tc.delta }));
+      
+      if (categoryData.length >= 2) {
+        categoriesPerformance[cat.id.toString()] = this.calculatePerformanceMetrics(
+          categoryData.map((d, i) => ({
+            month: recentMonths[i] || '',
+            score: d.score,
+            delta: d.delta
+          }))
+        );
+      }
+    });
+
+    return {
+      levelLabels,
+      months: recentMonths,
+      insightLines: [
+        'Atualmente em sua trilha de crescimento',
+        'Continue evoluindo para alcançar novos patamares'
+      ],
+      general: {
+        data: generalData,
+        performance: generalPerformance
+      },
+      categories: {
+        data: categoriesData,
+        performance: categoriesPerformance
+      }
+    };
+  }
+
+  /**
+   * Retorna dados de evolução geral
+   * @param userId - ID do usuário no Directus
+   * @param token - Token do Directus
+   */
+  static async getEvolutionGeneralData(userId?: number, token?: string) {
     try {
       console.log('[DashboardService] getEvolutionGeneralData - Carregando evolução geral');
       
-      const mockData = await this.loadMockData();
-      const evolutionData = mockData.evolution?.general;
+      if (!userId) {
+        throw new Error('userId é obrigatório para buscar dados de evolução');
+      }
+
+      const dashboardData = await this.getDashboardData(userId, token);
+      const evolutionData = dashboardData.evolution?.general;
       
       if (!evolutionData) {
         throw new Error('Dados de evolução geral não encontrados');
@@ -48,13 +556,19 @@ export class DashboardService {
 
   /**
    * Retorna dados de evolução por categorias
+   * @param userId - ID do usuário no Directus
+   * @param token - Token do Directus
    */
-  static async getEvolutionCategoriesData() {
+  static async getEvolutionCategoriesData(userId?: number, token?: string) {
     try {
       console.log('[DashboardService] getEvolutionCategoriesData - Carregando evolução por categorias');
       
-      const mockData = await this.loadMockData();
-      const evolutionData = mockData.evolution?.categories;
+      if (!userId) {
+        throw new Error('userId é obrigatório para buscar dados de evolução');
+      }
+
+      const dashboardData = await this.getDashboardData(userId, token);
+      const evolutionData = dashboardData.evolution?.categories;
       
       if (!evolutionData) {
         throw new Error('Dados de evolução por categorias não encontrados');
@@ -74,13 +588,19 @@ export class DashboardService {
 
   /**
    * Retorna dados de performance geral
+   * @param userId - ID do usuário no Directus
+   * @param token - Token do Directus
    */
-  static async getPerformanceGeneralData() {
+  static async getPerformanceGeneralData(userId?: number, token?: string) {
     try {
       console.log('[DashboardService] getPerformanceGeneralData - Carregando performance geral');
       
-      const mockData = await this.loadMockData();
-      const performanceData = mockData.evolution?.general?.performance;
+      if (!userId) {
+        throw new Error('userId é obrigatório para buscar dados de performance');
+      }
+
+      const dashboardData = await this.getDashboardData(userId, token);
+      const performanceData = dashboardData.evolution?.general?.performance;
       
       if (!performanceData) {
         throw new Error('Dados de performance geral não encontrados');
@@ -101,13 +621,20 @@ export class DashboardService {
 
   /**
    * Retorna dados de performance por categoria específica
+   * @param categoryId - ID da categoria
+   * @param userId - ID do usuário no Directus
+   * @param token - Token do Directus
    */
-  static async getPerformanceCategoryData(categoryId: string) {
+  static async getPerformanceCategoryData(categoryId: string, userId?: number, token?: string) {
     try {
       console.log('[DashboardService] getPerformanceCategoryData - Carregando performance para categoria:', categoryId);
       
-      const mockData = await this.loadMockData();
-      const categoryPerformance = mockData.evolution?.categories?.performance?.[categoryId];
+      if (!userId) {
+        throw new Error('userId é obrigatório para buscar dados de performance');
+      }
+
+      const dashboardData = await this.getDashboardData(userId, token);
+      const categoryPerformance = dashboardData.evolution?.categories?.performance?.[categoryId];
       
       if (!categoryPerformance) {
         throw new Error(`Dados de performance para categoria ${categoryId} não encontrados`);
