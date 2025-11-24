@@ -193,7 +193,7 @@ export class DiagnosticsService extends DirectusBaseService<Diagnostic> {
         method: 'GET',
         params: {
           filter: { id: { _eq: companyId } },
-          fields: ['id', 'nome', 'cnpj', 'created_at', 'updated_at']
+          fields: ['id', 'nome', 'cnpj']
         },
         token
       });

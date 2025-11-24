@@ -8,7 +8,7 @@ import { WebSocketManager } from './websocket/websocket-server';
 import app from './app';
 
 // Carregar variáveis de ambiente do arquivo .env na raiz do projeto
-const envPath = path.resolve(__dirname, '../.env');
+const envPath = path.resolve(__dirname, '.env');
 dotenv.config({ path: envPath });
 
 console.log('🔧 Variáveis de ambiente carregadas:');

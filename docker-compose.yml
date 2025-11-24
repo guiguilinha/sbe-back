@@ -3,11 +3,12 @@ version: '3.8'
 services:
   # Backend API
   backend:
+    container_name: maturidade-digital-backend
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8081:8080"
+      - "8080:8080"
     environment:
       - NODE_ENV=development
       - PORT=8080
@@ -17,17 +18,32 @@ services:
       - DIRECTUS_TOKEN=${DIRECTUS_TOKEN}
       - DIRECTUS_EMAIL=${DIRECTUS_EMAIL}
       - DIRECTUS_PASSWORD=${DIRECTUS_PASSWORD}
-      - KEYCLOAK_REALM=externo
-      - KEYCLOAK_AUTH_SERVER_URL=https://auth.sebrae-mg.com.br
-      - KEYCLOAK_SSL_REQUIRED=external
-      - KEYCLOAK_RESOURCE=maturidadedigital-backend
-      - KEYCLOAK_SECRET=${KEYCLOAK_SECRET}
-      - DB_HOST=maturidade_digital_db
-      - DB_PORT=3306
-      - DB_NAME=maturidade_digital_db
-      - DB_USER=directus
-      - DB_PASSWORD=${DB_PASSWORD}
+      - KEYCLOAK_BACKEND_REALM=${KEYCLOAK_BACKEND_REALM:-externo}
+      - KEYCLOAK_BACKEND_AUTH_SERVER_URL=${KEYCLOAK_BACKEND_AUTH_SERVER_URL}
+      - KEYCLOAK_BACKEND_SSL_REQUIRED=${KEYCLOAK_BACKEND_SSL_REQUIRED:-external}
+      - KEYCLOAK_BACKEND_RESOURCE=${KEYCLOAK_BACKEND_RESOURCE:-maturidadedigital-backend}
+      - KEYCLOAK_BACKEND_SECRET=${KEYCLOAK_BACKEND_SECRET}
+      - DB_HOST=${MYSQL_HOST:-maturidade_digital_db}
+      - DB_PORT=${MYSQL_PORT:-3306}
+      - DB_NAME=${MYSQL_DATABASE:-maturidade_digital_db}
+      - DB_USER=${MYSQL_USER:-directus}
+      - DB_PASSWORD=${MYSQL_PASSWORD}
       - REDIS_URL=redis://maturidade_digital_redis:6379
+      # MySQL Legado (REGISTRO_MYSQL_*)
+      - REGISTRO_MYSQL_HOST=${REGISTRO_MYSQL_HOST}
+      - REGISTRO_MYSQL_PORT=${REGISTRO_MYSQL_PORT}
+      - REGISTRO_MYSQL_USER=${REGISTRO_MYSQL_USER}
+      - REGISTRO_MYSQL_PASSWORD=${REGISTRO_MYSQL_PASSWORD}
+      - REGISTRO_MYSQL_DATABASE=${REGISTRO_MYSQL_DATABASE}
+      # CPE Backend
+      - CPE_BACKEND_URL=${CPE_BACKEND_URL}
+      - CPE_BACKEND_TIMEOUT=${CPE_BACKEND_TIMEOUT:-10000}
+      # Directus WebSocket
+      - DIRECTUS_WEBSOCKET=${DIRECTUS_WEBSOCKET:-true}
+      - DIRECTUS_WEBSOCKET_HEARTBEAT=${DIRECTUS_WEBSOCKET_HEARTBEAT:-30}
+      - DIRECTUS_WEBSOCKET_REST_PATH=${DIRECTUS_WEBSOCKET_REST_PATH:-/ws}
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     # depends_on removido - usando containers existentes
     volumes:
       - ./src:/app/src
